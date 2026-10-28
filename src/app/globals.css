@@ -67,3 +67,6 @@ footer{border-top:1px solid #eee;max-width:1120px;margin:auto;padding:30px 20px 
 .verdict.info{background:#eceff2;color:#5f6873}
 .segment-list button.seg-toggle{border:0;background:none;padding:0;text-align:left;color:inherit;font:inherit;cursor:pointer}.segment-list .seg-source{display:block;margin-top:7px;color:#5f6873;font-size:11px}
 .warn-list{list-style:none;margin:14px 0 0;padding:14px 18px;border-radius:12px;background:#fff0e6;color:#a84c1d;font-size:13px;font-weight:600;display:grid;gap:8px}
+
+.hero-start{min-width:320px}
+@media(max-width:760px){.hero-start{min-width:0;width:100%;max-width:320px}}

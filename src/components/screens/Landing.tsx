@@ -27,17 +27,12 @@ export function Landing() {
         <HeroMapBackground />
         <div className="hero-copy">
           <div className="pin" aria-hidden="true"><span /></div>
-          <p className="eyebrow">대전 효도여행 플래너</p>
           <h1>부모님 보폭에 맞춘<br />하루 여행</h1>
           <p className="lead">주차장에서 입구, 관람길 계단까지 계산해서<br className="desktop" /> 부모님이 편하게 걸을 수 있는 일정으로 고쳐드려요.</p>
           <div className="hero-actions">
-            <button className="button" onClick={onStart}>지금 시작하기</button>
-            <a className="text-link" href="#how">어떻게 작동하나요 <span>→</span></a>
+            <button className="button hero-start" onClick={onStart}>지금 시작하기</button>
           </div>
         </div>
-        <div className="float-card conditions"><b>부모님 걷기 조건</b><div><span>쉬지 않고 20분</span><span>계단 피하기</span></div></div>
-        <div className="float-card result"><i>✓</i><div><b>우회로로 바꿨어요</b><small>계단 0칸 · 3분 더 걸려요</small></div></div>
-        <div className="warning">! 계단 24칸</div>
         <CityScene />
       </section>
 
