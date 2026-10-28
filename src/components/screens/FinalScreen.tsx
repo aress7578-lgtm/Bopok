@@ -53,6 +53,7 @@ export function FinalScreen() {
     <p className="question-count">6 / 6 · 확정</p><h1>확정된 하루 일정</h1><p className="question-help">가족에게 보내기 좋게 꼭 필요한 내용만 정리했어요.</p>
     <div className="timeline">{plan.rows.map(row => <div key={row.time}><time>{row.time}</time><span><b>{row.name}</b><small>{row.detail}</small></span></div>)}</div>
     <div className="day-total">{plan.total} <em>추정치</em></div>
+    {plan.warnings.length > 0 && <ul className="warn-list">{plan.warnings.map(line => <li key={line}>{line}</li>)}</ul>}
     <div className="notice"><b>출발 전 운영 여부를 꼭 확인하세요</b><p>{plan.notice.map((line, i) => <span key={line}>{i > 0 && <br />}{line}</span>)}</p></div>
     <div className="share-actions"><button className="button" onClick={share}>가족에게 보내기</button><button className="save-button" onClick={copy}>복사하기</button></div>
     <button className="direct-link" onClick={() => go('/review')}>다녀오셨나요? 구간 평가하기</button>
