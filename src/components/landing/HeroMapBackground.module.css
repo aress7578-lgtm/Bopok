@@ -4,15 +4,15 @@
   --map-fade: 6s;           /* 연한 지도 → 선명한 지도 */
   --blur-time: 3s;          /* 선명해지는 블러 구간 */
   --zoom-time: 7s;          /* 지도 1.08 → 1.0 */
-  --breathe-time: 40s;      /* 지도 숨쉬기 주기 */
+  --breathe-time: 30s;      /* 지도 천천히 움직이는 주기 */
   --cloud-clear: 6.5s;      /* 두꺼운 구름 걷힘 */
   --wisp-start: 7s;         /* 옅은 구름·그림자 시작 */
-  --wisp1-time: 50s;        /* 옅은 구름 1층 주기 */
-  --wisp2-time: 70s;        /* 옅은 구름 2층 주기 */
-  --wisp2-offset: 25s;      /* 2층이 1층보다 늦게 시작 */
-  --cloud-max: 0.35;        /* 옅은 구름 최대 진하기 */
-  --shadow-max: 0.22;       /* 구름 그림자 최대 진하기 */
-  --drift: 10%;             /* 구름 이동 폭(요소 크기 기준) */
+  --wisp1-time: 32s;        /* 옅은 구름 1층 주기 */
+  --wisp2-time: 46s;        /* 옅은 구름 2층 주기 */
+  --wisp2-offset: 14s;      /* 2층이 1층보다 늦게 시작 */
+  --cloud-max: 1;           /* 옅은 구름 최대 진하기 */
+  --shadow-max: 0.5;        /* 구름 그림자 최대 진하기 */
+  --drift: 16%;             /* 구름 이동 폭(요소 크기 기준) */
   --shadow-shift: 4%;       /* 그림자가 구름보다 오른쪽 아래로 어긋나는 정도 */
 
   position: absolute;
@@ -112,7 +112,7 @@
 
 @keyframes breathe {
   from { transform: scale(1); }
-  to { transform: scale(1.03); }
+  to { transform: scale(1.06) translate3d(-1.2%, -0.8%, 0); }
 }
 
 @keyframes fade-in {
