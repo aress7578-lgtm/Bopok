@@ -1,7 +1,8 @@
 'use client'
 
 import { usePlan } from '@/components/PlanProvider'
-import { finalNotice, finalTimeline, finalTotal } from '@/lib/plan-data'
+import { conditionFromAnswers, type OptionKey } from '@/lib/judge'
+import { buildFinalPlan } from '@/lib/final-plan'
 import { buildShareText } from '@/lib/share-text'
 
 async function copyText(text: string) {
@@ -27,14 +28,15 @@ async function copyText(text: string) {
 }
 
 export function FinalScreen() {
-  const { go, notify } = usePlan()
+  const { state, go, notify } = usePlan()
+  const plan = buildFinalPlan(state.places, state.option as OptionKey, conditionFromAnswers(state.answers))
 
   const copy = async () => {
-    notify((await copyText(buildShareText())) ? '일정 글을 복사했어요' : '복사하지 못했어요')
+    notify((await copyText(buildShareText(plan))) ? '일정 글을 복사했어요' : '복사하지 못했어요')
   }
 
   const share = async () => {
-    const text = buildShareText()
+    const text = buildShareText(plan)
     if (typeof navigator.share === 'function') {
       try {
         await navigator.share({ title: '보폭 하루 일정', text })
@@ -49,9 +51,9 @@ export function FinalScreen() {
 
   return <div className="planner-content share-page">
     <p className="question-count">6 / 6 · 확정</p><h1>확정된 하루 일정</h1><p className="question-help">가족에게 보내기 좋게 꼭 필요한 내용만 정리했어요.</p>
-    <div className="timeline">{finalTimeline.map(row => <div key={row[0]}><time>{row[0]}</time><span><b>{row[1]}</b><small>{row[2]}</small></span></div>)}</div>
-    <div className="day-total">{finalTotal} <em>추정치</em></div>
-    <div className="notice"><b>출발 전 운영 여부를 꼭 확인하세요</b><p>{finalNotice.map((line, i) => <span key={line}>{i > 0 && <br />}{line}</span>)}</p></div>
+    <div className="timeline">{plan.rows.map(row => <div key={row.time}><time>{row.time}</time><span><b>{row.name}</b><small>{row.detail}</small></span></div>)}</div>
+    <div className="day-total">{plan.total} <em>추정치</em></div>
+    <div className="notice"><b>출발 전 운영 여부를 꼭 확인하세요</b><p>{plan.notice.map((line, i) => <span key={line}>{i > 0 && <br />}{line}</span>)}</p></div>
     <div className="share-actions"><button className="button" onClick={share}>가족에게 보내기</button><button className="save-button" onClick={copy}>복사하기</button></div>
     <button className="direct-link" onClick={() => go('/review')}>다녀오셨나요? 구간 평가하기</button>
     <button className="back home-bottom" onClick={() => go('/')}>처음으로</button>

@@ -18,7 +18,7 @@ export function ConfirmScreen() {
       const time = `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`
       update({ places: [...places, { id: `p${Date.now()}`, time, name, tag: '' }] })
     } else {
-      update({ places: places.map(p => p.id === target ? { ...p, name, tag: p.tag === '정보 없음' ? '' : p.tag } : p) })
+      update({ places: places.map(p => p.id === target ? { ...p, name, tag: p.tag === '정보 없음' ? '' : p.tag, finalName: undefined, finalNote: undefined } : p) })
     }
     setTarget(null)
   }

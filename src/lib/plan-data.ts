@@ -21,29 +21,19 @@ export const stagePaths = [
 
 export const reviewPath = '/review'
 
-export const demoAnswers = [1, 1, 0, 1, 0]
+// 기본 조건(쉬지 않고 20분 / 하루 60분 / 쉬는 시간 10분 / 계단 피하기 / 천천히)과 같은 예시 답
+export const demoAnswers = [1, 1, 1, 0, 0]
 
-export type PlaceRow = { id: string; time: string; name: string; tag: string }
+export type PlaceRow = { id: string; time: string; name: string; tag: string; finalName?: string; finalNote?: string }
 
 export const defaultPlaces: PlaceRow[] = [
   { id: 'p1', time: '10:00', name: '한밭수목원', tag: '꼭 갈 곳' },
-  { id: 'p2', time: '12:00', name: '점심 (둔산동 식당)', tag: '정보 없음' },
+  { id: 'p2', time: '12:00', name: '점심 (둔산동 식당)', tag: '정보 없음', finalName: '점심 (둔산동)', finalNote: '수목원 → 식당 택시 약 5분' },
   { id: 'p3', time: '13:30', name: '국립중앙과학관', tag: '' },
   { id: 'p4', time: '16:00', name: '대전시립미술관', tag: '예약 16:00' },
 ]
 
 export const placeChoices = ['한밭수목원', '국립중앙과학관', '대전시립미술관', '이응노미술관', '엑스포과학공원 한빛탑', '엑스포다리']
-
-export const finalTimeline = [
-  ['10:00', '한밭수목원', '걷기 약 29~32분 · 추정치 · 실내 쉼터에서 10분 쉬기'],
-  ['12:00', '점심 (둔산동)', '정보 없음 · 수목원 → 식당 택시 약 5분'],
-  ['13:30', '국립중앙과학관', '걷기 약 15~17분 · 추정치'],
-  ['16:00', '대전시립미술관', '예약 · 걷기 약 8~9분 · 추정치'],
-]
-
-export const finalTotal = '하루 걷기 약 52~57분 · 쉬지 않고 걷는 시간 최대 약 20분'
-
-export const finalNotice = ['한밭수목원 042-○○○-○○○○', '국립중앙과학관 042-○○○-○○○○', '대전시립미술관 042-○○○-○○○○']
 
 export const reviewSegments = ['주차장 → 입구', '입구 → 실내 쉼터', '실내 쉼터 → 전망 데크 (경사로)', '전망 데크 → 정원', '점심 장소 안 길']
 
