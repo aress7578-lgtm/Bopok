@@ -1,4 +1,4 @@
-import { demoAnswers, exampleSchedule } from './plan-data'
+import { defaultPlaces, demoAnswers, exampleSchedule, type PlaceRow } from './plan-data'
 
 export type PlanState = {
   answers: number[]
@@ -7,6 +7,7 @@ export type PlanState = {
   organized: boolean
   option: number
   demo: boolean
+  places: PlaceRow[]
 }
 
 export const PLAN_STORAGE_KEY = 'bobok-plan'
@@ -18,6 +19,7 @@ export const initialPlan: PlanState = {
   organized: false,
   option: 0,
   demo: false,
+  places: defaultPlaces,
 }
 
 export const demoPlan: PlanState = {
@@ -27,6 +29,7 @@ export const demoPlan: PlanState = {
   organized: true,
   option: 0,
   demo: true,
+  places: defaultPlaces,
 }
 
 // 랜딩에서 시작할 때 이전 상태가 복원되지 않도록 저장값을 직접 지정/삭제한다.
