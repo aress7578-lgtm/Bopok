@@ -12,7 +12,8 @@ export function HeroMapBackground() {
           <Image src="/hero/map-vivid.webp" alt="" aria-hidden="true" fill preload sizes="100vw" className={styles.mapImage} />
         </div>
       </div>
-      <div className={`${styles.shadow}`} />
+      <div className={styles.glow} />
+      <div className={styles.shadow} />
       <div className={styles.thickClouds} />
       <div className={`${styles.wisp} ${styles.wisp1}`} />
       <div className={`${styles.wisp} ${styles.wisp2}`} />

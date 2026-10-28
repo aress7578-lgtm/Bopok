@@ -1,18 +1,19 @@
 /* 조절 값은 전부 여기 모아 둠 */
 .root {
   --intro-delay: 0.8s;      /* 인트로 시작 지연 */
-  --map-fade: 6s;           /* 연한 지도 → 선명한 지도 */
-  --blur-time: 3s;          /* 선명해지는 블러 구간 */
-  --zoom-time: 7s;          /* 지도 1.08 → 1.0 */
-  --breathe-time: 30s;      /* 지도 천천히 움직이는 주기 */
-  --cloud-clear: 6.5s;      /* 두꺼운 구름 걷힘 */
-  --wisp-start: 7s;         /* 옅은 구름·그림자 시작 */
+  --map-fade: 3.5s;          /* 연한 지도 → 선명한 지도 */
+  --blur-time: 2s;          /* 선명해지는 블러 구간 */
+  --zoom-time: 4s;          /* 지도 1.08 → 1.0 */
+  --breathe-time: 24s;      /* 지도 천천히 움직이는 주기 */
+  --cloud-clear: 3.5s;      /* 두꺼운 구름 걷힘 */
+  --wisp-start: 4s;         /* 옅은 구름·그림자 시작 */
   --wisp1-time: 32s;        /* 옅은 구름 1층 주기 */
   --wisp2-time: 46s;        /* 옅은 구름 2층 주기 */
   --wisp2-offset: 14s;      /* 2층이 1층보다 늦게 시작 */
   --cloud-max: 1;           /* 옅은 구름 최대 진하기 */
   --shadow-max: 0.5;        /* 구름 그림자 최대 진하기 */
   --drift: 16%;             /* 구름 이동 폭(요소 크기 기준) */
+  --glow-time: 18s;         /* 빛 번짐 왕복 주기 */
   --shadow-shift: 4%;       /* 그림자가 구름보다 오른쪽 아래로 어긋나는 정도 */
 
   position: absolute;
@@ -93,6 +94,19 @@
   animation: drift-shadow var(--wisp1-time) linear var(--wisp-start) infinite;
 }
 
+/* 선명한 지도 위를 천천히 지나가는 빛 번짐 */
+.glow {
+  position: absolute;
+  width: 90%;
+  height: 90%;
+  left: 5%;
+  top: 5%;
+  opacity: 0;
+  background: radial-gradient(closest-side, rgba(255, 246, 220, 0.55), rgba(255, 246, 220, 0));
+  will-change: transform, opacity;
+  animation: glow var(--glow-time) ease-in-out var(--wisp-start) infinite alternate;
+}
+
 /* 제목 가독성 덮개 */
 .veil {
   position: absolute;
@@ -112,7 +126,7 @@
 
 @keyframes breathe {
   from { transform: scale(1); }
-  to { transform: scale(1.06) translate3d(-1.2%, -0.8%, 0); }
+  to { transform: scale(1.09) translate3d(-2.2%, -1.4%, 0); }
 }
 
 @keyframes fade-in {
@@ -128,6 +142,13 @@
 @keyframes clear {
   from { opacity: 1; transform: scale(1); visibility: visible; }
   to { opacity: 0; transform: scale(1.5); visibility: hidden; }
+}
+
+@keyframes glow {
+  0% { opacity: 0; transform: translate3d(-35%, 20%, 0); }
+  25% { opacity: 1; }
+  75% { opacity: 1; }
+  100% { opacity: 0; transform: translate3d(35%, -20%, 0); }
 }
 
 @keyframes drift {
@@ -176,7 +197,8 @@
 
   .thickClouds,
   .wisp,
-  .shadow {
+  .shadow,
+  .glow {
     display: none;
   }
 }
