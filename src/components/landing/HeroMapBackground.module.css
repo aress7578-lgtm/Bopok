@@ -102,7 +102,7 @@
   left: 5%;
   top: 5%;
   opacity: 0;
-  background: radial-gradient(closest-side, rgba(255, 246, 220, 0.55), rgba(255, 246, 220, 0));
+  background: radial-gradient(closest-side, rgba(255, 246, 220, 0.3), rgba(255, 246, 220, 0));
   will-change: transform, opacity;
   animation: glow var(--glow-time) ease-in-out var(--wisp-start) infinite alternate;
 }
@@ -113,9 +113,9 @@
   inset: 0;
   background: radial-gradient(
     ellipse at center,
-    rgba(250, 250, 250, 0.88) 0%,
-    rgba(250, 250, 250, 0.6) 32%,
-    rgba(250, 250, 250, 0) 68%
+    rgba(250, 250, 250, 0.7) 0%,
+    rgba(250, 250, 250, 0.38) 30%,
+    rgba(250, 250, 250, 0) 60%
   );
 }
 
@@ -153,8 +153,9 @@
 
 @keyframes drift {
   0% { opacity: 0; transform: translate3d(calc(var(--drift) * -1), calc(var(--drift) * -1), 0); }
-  30% { opacity: var(--cloud-max); }
-  70% { opacity: var(--cloud-max); }
+  15% { opacity: var(--cloud-max); }
+  45% { opacity: var(--cloud-max); }
+  60% { opacity: 0; }
   100% { opacity: 0; transform: translate3d(var(--drift), var(--drift), 0); }
 }
 
@@ -163,8 +164,9 @@
     opacity: 0;
     transform: translate3d(calc(var(--drift) * -1 + var(--shadow-shift)), calc(var(--drift) * -1 + var(--shadow-shift)), 0);
   }
-  30% { opacity: var(--shadow-max); }
-  70% { opacity: var(--shadow-max); }
+  15% { opacity: var(--shadow-max); }
+  45% { opacity: var(--shadow-max); }
+  60% { opacity: 0; }
   100% {
     opacity: 0;
     transform: translate3d(calc(var(--drift) + var(--shadow-shift)), calc(var(--drift) + var(--shadow-shift)), 0);
