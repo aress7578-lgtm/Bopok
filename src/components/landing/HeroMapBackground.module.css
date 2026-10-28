@@ -1,0 +1,182 @@
+/* 조절 값은 전부 여기 모아 둠 */
+.root {
+  --intro-delay: 0.8s;      /* 인트로 시작 지연 */
+  --map-fade: 6s;           /* 연한 지도 → 선명한 지도 */
+  --blur-time: 3s;          /* 선명해지는 블러 구간 */
+  --zoom-time: 7s;          /* 지도 1.08 → 1.0 */
+  --breathe-time: 40s;      /* 지도 숨쉬기 주기 */
+  --cloud-clear: 6.5s;      /* 두꺼운 구름 걷힘 */
+  --wisp-start: 7s;         /* 옅은 구름·그림자 시작 */
+  --wisp1-time: 50s;        /* 옅은 구름 1층 주기 */
+  --wisp2-time: 70s;        /* 옅은 구름 2층 주기 */
+  --wisp2-offset: 25s;      /* 2층이 1층보다 늦게 시작 */
+  --cloud-max: 0.35;        /* 옅은 구름 최대 진하기 */
+  --shadow-max: 0.22;       /* 구름 그림자 최대 진하기 */
+  --drift: 10%;             /* 구름 이동 폭(요소 크기 기준) */
+  --shadow-shift: 4%;       /* 그림자가 구름보다 오른쪽 아래로 어긋나는 정도 */
+
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  isolation: isolate;
+  background: #f4f5f2;
+}
+
+.stage {
+  position: absolute;
+  inset: 0;
+  transform: scale(1.08);
+  will-change: transform;
+  animation:
+    zoom-in var(--zoom-time) ease-out forwards,
+    breathe var(--breathe-time) ease-in-out var(--zoom-time) infinite alternate;
+}
+
+.map {
+  position: absolute;
+  inset: 0;
+}
+
+.mapImage {
+  object-fit: cover;
+}
+
+.vivid {
+  opacity: 0;
+  will-change: opacity, filter;
+  animation:
+    fade-in var(--map-fade) ease-in-out var(--intro-delay) forwards,
+    sharpen var(--blur-time) ease-out var(--intro-delay) both;
+}
+
+.thickClouds {
+  position: absolute;
+  inset: 0;
+  background: url('/hero/clouds.png') center / cover no-repeat;
+  transform-origin: center;
+  will-change: transform, opacity;
+  animation: clear var(--cloud-clear) ease-in-out var(--intro-delay) forwards;
+}
+
+/* 옅은 구름·그림자: 화면보다 크게(160%) 깔고 가운데 맞춤 */
+.wisp,
+.shadow {
+  position: absolute;
+  width: 160%;
+  height: 160%;
+  left: -30%;
+  top: -30%;
+  opacity: 0;
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+  will-change: transform, opacity;
+}
+
+.wisp {
+  background-image: url('/hero/clouds-wisps.png');
+}
+
+.wisp1 {
+  animation: drift var(--wisp1-time) linear var(--wisp-start) infinite;
+}
+
+.wisp2 {
+  animation: drift var(--wisp2-time) linear calc(var(--wisp-start) + var(--wisp2-offset)) infinite reverse;
+}
+
+.shadow {
+  background-image: url('/hero/cloud-shadow.png');
+  mix-blend-mode: multiply;
+  animation: drift-shadow var(--wisp1-time) linear var(--wisp-start) infinite;
+}
+
+/* 제목 가독성 덮개 */
+.veil {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(250, 250, 250, 0.88) 0%,
+    rgba(250, 250, 250, 0.6) 32%,
+    rgba(250, 250, 250, 0) 68%
+  );
+}
+
+@keyframes zoom-in {
+  from { transform: scale(1.08); }
+  to { transform: scale(1); }
+}
+
+@keyframes breathe {
+  from { transform: scale(1); }
+  to { transform: scale(1.03); }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes sharpen {
+  from { filter: blur(4px); }
+  to { filter: none; }
+}
+
+@keyframes clear {
+  from { opacity: 1; transform: scale(1); visibility: visible; }
+  to { opacity: 0; transform: scale(1.5); visibility: hidden; }
+}
+
+@keyframes drift {
+  0% { opacity: 0; transform: translate3d(calc(var(--drift) * -1), calc(var(--drift) * -1), 0); }
+  30% { opacity: var(--cloud-max); }
+  70% { opacity: var(--cloud-max); }
+  100% { opacity: 0; transform: translate3d(var(--drift), var(--drift), 0); }
+}
+
+@keyframes drift-shadow {
+  0% {
+    opacity: 0;
+    transform: translate3d(calc(var(--drift) * -1 + var(--shadow-shift)), calc(var(--drift) * -1 + var(--shadow-shift)), 0);
+  }
+  30% { opacity: var(--shadow-max); }
+  70% { opacity: var(--shadow-max); }
+  100% {
+    opacity: 0;
+    transform: translate3d(calc(var(--drift) + var(--shadow-shift)), calc(var(--drift) + var(--shadow-shift)), 0);
+  }
+}
+
+/* 휴대폰: 2층 구름과 그림자는 뺀다 */
+@media (max-width: 767px) {
+  .wisp2,
+  .shadow {
+    display: none;
+  }
+}
+
+/* 움직임 줄이기: 선명한 지도 + 덮개만 정지 화면 */
+@media (prefers-reduced-motion: reduce) {
+  .stage,
+  .vivid {
+    animation: none;
+  }
+
+  .stage {
+    transform: none;
+  }
+
+  .vivid {
+    opacity: 1;
+    filter: none;
+  }
+
+  .thickClouds,
+  .wisp,
+  .shadow {
+    display: none;
+  }
+}

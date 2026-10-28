@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import { CityScene } from '@/components/CityScene'
+import { HeroMapBackground } from '@/components/landing/HeroMapBackground'
 import { startDemo, startFresh } from '@/lib/plan-storage'
 
 export function Landing() {
@@ -23,6 +24,7 @@ export function Landing() {
       </nav>
 
       <section className="hero">
+        <HeroMapBackground />
         <div className="hero-copy">
           <div className="pin" aria-hidden="true"><span /></div>
           <p className="eyebrow">대전 효도여행 플래너</p>
