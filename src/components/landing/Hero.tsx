@@ -5,10 +5,10 @@ import dynamic from 'next/dynamic'
 import type { Map as MapLibreMap } from 'maplibre-gl'
 import {
   ACTIONS, BACK_FLY_MS, DRIFT_METERS, DRIFT_MS, EXIT, EXPLORE_VIEW, FLY_MS, GLYPH, GLYPH_SEEN, HINT_MS, INTRO_VIEW, LEAD,
-  MAP_FILTER_MS, MOBILE_MAX_WIDTH, PLACE_PINS, QUIET_MAP_FILTER, SEEN_KEY, TITLE_LINES, TITLE_TEXT, TOUR_MS, TOUR_RESUME_MS,
+  MAP_FILTER_MS, DRIFT_AFTER_EXTRAS_MS, EXTRAS_AFTER_INTRO_MS, prefetchTileUrls, MOBILE_MAX_WIDTH, READY_TIMEOUT_MS, PLACE_PINS, QUIET_MAP_FILTER, SEEN_KEY, TITLE_LINES, TITLE_TEXT, TOUR_MS, TOUR_RESUME_MS,
   TOUR_WAYPOINTS, VEIL, VEIL_FADE_MS, exitHalfMs, exitTotalMs, introTimeline,
 } from '@/lib/landing-intro'
-import { PALETTE } from '@/lib/map-config'
+import { BUILDINGS_TILES, PALETTE } from '@/lib/map-config'
 import type { MapPin } from '@/lib/map-geojson'
 import { createCameraLoop, metersToLon, type CameraLoop } from './tour'
 import styles from './Hero.module.css'
@@ -34,6 +34,9 @@ export function Hero({ onStart }: { onStart: () => void }) {
   const [arrived, setArrived] = useState(false)   // 둘러보기로 내려앉아 도착함
   const [homeReady, setHomeReady] = useState(true) // 첫 화면 위치로 돌아와 있음(돌아가는 중이면 false)
   const [flat, setFlat] = useState(true)          // true = 건물 높이 0 (평면 지도)
+  const [ready, setReady] = useState(false)       // 지도가 자리 잡아서(또는 시간이 지나서) 글자 연출을 시작해도 됨
+  const [introDone, setIntroDone] = useState(false) // 소개 연출이 끝남(그때부터 무거운 나무를 불러온다)
+  const [driftOk, setDriftOk] = useState(false)     // 나무까지 자리 잡아서 평면 지도가 흘러도 됨
   const [colorOn, setColorOn] = useState(false)  // false = 색이 빠진 조용한 지도, true = 색이 돌아옴
   const [showHint, setShowHint] = useState(false)
   const [map, setMap] = useState<MapLibreMap | null>(null)
@@ -80,8 +83,21 @@ export function Hero({ onStart }: { onStart: () => void }) {
 
   useEffect(() => () => timers.current.forEach(window.clearTimeout), [])
 
-  const onMapReady = useCallback((m: MapLibreMap) => setMap(m), [])
+  // 지도가 처음 다 그려져 한가해지면(idle) 글자 연출 시작
+  const onMapReady = useCallback((m: MapLibreMap) => {
+    setMap(m)
+    m.once('idle', () => setReady(true))
+  }, [])
   const onMapFail = useCallback(() => setMapFailed(true), [])
+  // 지도가 늦거나 실패해도 글자는 보여야 한다
+  useEffect(() => {
+    const id = window.setTimeout(() => setReady(true), READY_TIMEOUT_MS)
+    return () => window.clearTimeout(id)
+  }, [])
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (mapFailed) setReady(true)
+  }, [mapFailed])
 
   // 카메라 이동 만들기
   useEffect(() => {
@@ -102,9 +118,10 @@ export function Hero({ onStart }: { onStart: () => void }) {
   useEffect(() => {
     const drift = driftRef.current
     if (!map || !drift) return
-    if (phase === 'intro' && homeReady && active && !reduced()) drift.start()
+    // 글자가 내려오는 동안에는 지도를 가만히 둔다(카메라 이동과 글자 연출이 한꺼번에 일어나면 끊긴다)
+    if (phase === 'intro' && homeReady && driftOk && active && !reduced()) drift.start()
     else drift.stop()
-  }, [map, phase, homeReady, active])
+  }, [map, phase, homeReady, driftOk, active])
 
   // 둘러보기: 도착한 뒤 천천히 미끄러지듯 이동. 만지면 멈추고 TOUR_RESUME_MS 동안 안 만지면 이어간다
   const tourWanted = phase === 'exploring' && arrived && active && !showHint
@@ -180,6 +197,23 @@ export function Hero({ onStart }: { onStart: () => void }) {
   // 등장 타임라인(다시 들어온 경우는 더 짧고 빠르게)
   const timing = seen ? GLYPH_SEEN : GLYPH
   const tl = useMemo(() => introTimeline(TITLE_LINES, timing, LEAD_LINES.length), [timing])
+  // 글자 연출이 모두 끝난 뒤에 나무를 불러오고 평면 지도를 흐르게 한다
+  const introEnd = tl.actionsDelay + ACTIONS.durationMs + ACTIONS.staggerMs + EXTRAS_AFTER_INTRO_MS
+  useEffect(() => {
+    if (!ready) return
+    const id = window.setTimeout(() => setIntroDone(true), reduced() ? 0 : introEnd)
+    return () => window.clearTimeout(id)
+  }, [ready, introEnd])
+  useEffect(() => {
+    if (!introDone) return
+    const id = window.setTimeout(() => setDriftOk(true), reduced() ? 0 : DRIFT_AFTER_EXTRAS_MS)
+    return () => window.clearTimeout(id)
+  }, [introDone])
+  // 소개가 끝나면 둘러보기 도착 지점의 건물 타일을 미리 받아 둔다(없어도 둘러보기는 된다)
+  useEffect(() => {
+    if (!introDone || mapFailed) return
+    for (const url of prefetchTileUrls(EXPLORE_VIEW, BUILDINGS_TILES)) fetch(url, { priority: 'low' } as RequestInit).catch(() => {})
+  }, [introDone, mapFailed])
   // 퇴장 순서는 왼쪽 글자부터(둘째 줄은 첫 줄 뒤에 이어서)
   const exitOrder = useMemo(() => {
     let n = 0
@@ -209,13 +243,14 @@ export function Hero({ onStart }: { onStart: () => void }) {
   } as React.CSSProperties
 
   return (
-    <section ref={heroRef} className={styles.hero} data-active={active} data-phase={phase} data-color={colorOn} style={cssVars}>
+    <section ref={heroRef} className={styles.hero} data-active={active} data-phase={phase} data-color={colorOn} data-ready={ready} style={cssVars}>
       <div className={styles.map}>
         <MapView
           mode="landing"
           flat={flat}
           compact={compact}
           interactive={exploring && arrived}
+          deferExtras={!(introDone || exploring)}
           initialView={INTRO_VIEW}
           pins={exploring && arrived ? placePins : []}
           onMapReady={onMapReady}

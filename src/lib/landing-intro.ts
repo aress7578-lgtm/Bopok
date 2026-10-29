@@ -9,6 +9,13 @@ export const LINE2_AT = 0.7                  // 둘째 줄은 첫 줄이 이만�
 export const LEAD = { durationMs: 900, riseEm: -10, lineGapMs: 120, startAt: 0.7 } // 설명: 줄 단위, 제목이 70% 진행됐을 때 시작. riseEm 은 px
 export const ACTIONS = { durationMs: 500, risePx: 6, staggerMs: 100 }
 export const SEEN_KEY = 'bobok-landing-seen'
+// 지도를 처음 띄우는 동안(스타일·셰이더·타일 처리)은 메인 스레드가 바빠서 글자가 끊긴다.
+// 그래서 지도가 자리 잡고(idle) 나서 글자가 움직이기 시작한다. 지도가 너무 늦거나 실패하면 이 시간 뒤에 그냥 시작한다
+export const READY_TIMEOUT_MS = 3000
+// 나무(three.js 불러오기·만들기)는 무거워서 소개 연출이 끝난 뒤(또는 둘러보기를 누를 때)에 불러온다
+export const EXTRAS_AFTER_INTRO_MS = 300
+// 나무를 만드는 동안(수백 ms 메인 스레드를 쓴다)은 지도를 움직이지 않고, 이 시간이 지난 뒤에 평면 지도가 흐르기 시작한다
+export const DRIFT_AFTER_EXTRAS_MS = 2500
 
 // ───────── 글자 퇴장 ("지도 둘러보기") ─────────
 export const EXIT = { durationMs: 500, staggerMs: 20, riseEm: -0.4, blurPx: 4 } // 왼쪽 글자부터. 설명·버튼도 함께 위로
@@ -17,7 +24,12 @@ export const VEIL_FADE_MS = 800              // 제목 뒤 덮개가 사라지�
 
 // ───────── 둘러보기 전환 ─────────
 export const FLY_MS = 4000
-export const RISE_MS = 1800                  // 건물 높이 배율 0 → 1 (카메라가 기울기 시작할 때부터)
+// 건물이 솟는 것은 시간이 아니라 줌에 맞춘다(GPU 가 줌으로 보간해서 프레임마다 JS 가 건물 전체를 다시 계산하지 않는다).
+// 내려앉는 카메라가 이 줌 구간을 지나는 동안 건물 높이가 0 → 1 로 커진다. 첫 화면 줌(14.6)은 구간 아래라 평면이다
+export const RISE_ZOOM: [number, number] = [14.7, 15.5]
+// 지도 화면 해상도(devicePixelRatio) 상한. 고해상도 휴대폰에서 매 프레임 그리는 픽셀 수를 줄인다
+export const PIXEL_RATIO_MAX = 2
+export const PIXEL_RATIO_MAX_COMPACT = 1.5
 export const HINT_MS = 2500                  // "끌어서 둘러보세요" 안내
 export const BACK_FLY_MS = 2500              // "처음으로" 복귀 카메라 이동
 export const PIN_FADE_MS = 600
@@ -49,6 +61,30 @@ export const PLACE_PINS: { id: string; name: string; coord: [number, number] }[]
   { id: 'place-science', name: '국립중앙과학관', coord: [127.3770, 36.3774] },
   { id: 'place-art', name: '대전시립미술관', coord: [127.3872, 36.3753] },
 ]
+
+// 둘러보기로 내려앉을 때 필요한 줌 16 건물 타일을 소개가 끝난 뒤 미리 받아 둔다(내려앉는 중 네트워크 기다림을 없앤다)
+export const PREFETCH_ZOOM = 16
+export const PREFETCH_RADIUS = 1 // 도착 지점 타일 둘레 몇 칸까지(1 = 3×3)
+
+// 경도·위도 → 슬리피 맵 타일 번호
+export function tileXY(lon: number, lat: number, z: number): [number, number] {
+  const n = 2 ** z
+  const x = Math.floor(((lon + 180) / 360) * n)
+  const rad = (lat * Math.PI) / 180
+  const y = Math.floor(((1 - Math.log(Math.tan(rad) + 1 / Math.cos(rad)) / Math.PI) / 2) * n)
+  return [x, y]
+}
+
+export function prefetchTileUrls(view: LandingView, template: string): string[] {
+  const [cx, cy] = tileXY(view.center[0], view.center[1], PREFETCH_ZOOM)
+  const urls: string[] = []
+  for (let dx = -PREFETCH_RADIUS; dx <= PREFETCH_RADIUS; dx++) {
+    for (let dy = -PREFETCH_RADIUS; dy <= PREFETCH_RADIUS; dy++) {
+      urls.push(template.replace('{z}', String(PREFETCH_ZOOM)).replace('{x}', String(cx + dx)).replace('{y}', String(cy + dy)))
+    }
+  }
+  return urls
+}
 
 // ───────── 화면 ─────────
 export const HERO_MIN_HEIGHT_PX = 640

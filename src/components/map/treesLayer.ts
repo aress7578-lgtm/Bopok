@@ -19,7 +19,8 @@ export function crownCenterHeight(top: number, radius: number) {
   return Math.max(top - radius * TREE_CROWN_SQUASH, radius * TREE_CROWN_SQUASH)
 }
 
-export async function createTreesLayer(data: TreesData): Promise<TreesLayer> {
+// riseZoom: [시작 줌, 끝 줌]. 주면 줌이 이 구간을 지나는 동안 나무가 땅에서 자라난다(건물이 솟는 것과 같은 줌 구간)
+export async function createTreesLayer(data: TreesData, opts: { riseZoom?: [number, number] } = {}): Promise<TreesLayer> {
   const THREE = await import('three')
   // 지도와 같은 색을 그대로 내보낸다(색 변환 없이)
   THREE.ColorManagement.enabled = false
@@ -93,6 +94,13 @@ export async function createTreesLayer(data: TreesData): Promise<TreesLayer> {
     render(_gl, args) {
       if (!renderer || !visible) return
       main.fromArray(args.defaultProjectionData.mainMatrix as unknown as number[])
+      let grow = 1
+      if (opts.riseZoom && map) {
+        const [z0, z1] = opts.riseZoom
+        grow = Math.min(1, Math.max(0, (map.getZoom() - z0) / (z1 - z0)))
+        if (grow <= 0.001) return // 아직 평면으로 내려오는 중이라 나무가 없다
+      }
+      toMercator.makeTranslation(origin.x, origin.y, origin.z).scale(new THREE.Vector3(unit, unit, unit * grow))
       camera.projectionMatrix.copy(main).multiply(toMercator)
       renderer.resetState()
       renderer.render(scene, camera)

@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
   ACTIONS, EXIT, EXPLORE_VIEW, GLYPH, GLYPH_SEEN, INTRO_VIEW, LEAD, LINE2_AT, PLACE_PINS, QUIET_MAP_FILTER,
-  TITLE_LINES, TOUR_WAYPOINTS, VEIL, exitHalfMs, exitTotalMs, glyphDelays, introTimeline,
+  TITLE_LINES, TOUR_WAYPOINTS, VEIL, exitHalfMs, exitTotalMs, glyphDelays, introTimeline, prefetchTileUrls, tileXY,
 } from './landing-intro'
-import { MAP_MAX_BOUNDS, TREE_BBOX } from './map-config'
+import fs from 'node:fs'
+import path from 'node:path'
+import { BUILDINGS_TILES, MAP_MAX_BOUNDS, TREE_BBOX } from './map-config'
 import { maxPitchForZoom } from './map-limits'
 
 const lineGlyphDelays = (delays: number[], line: string) => delays.filter((_, i) => line[i] !== ' ')
@@ -82,5 +84,19 @@ describe('지도 연출 값', () => {
   it('첫 화면은 평면(pitch 0)', () => {
     expect(INTRO_VIEW.pitch).toBe(0)
     expect(INTRO_VIEW.zoom).toBe(14.6)
+  })
+})
+
+describe('타일 미리 받기', () => {
+  it('도착 지점 줌 16 타일 번호가 실제 타일 파일 이름과 맞다', () => {
+    const [x, y] = tileXY(EXPLORE_VIEW.center[0], EXPLORE_VIEW.center[1], 16)
+    expect(fs.existsSync(path.join(__dirname, `../../public/tiles/buildings/16/${x}/${y}.pbf`))).toBe(true)
+  })
+
+  it('3×3 = 9개 주소를 만든다', () => {
+    const urls = prefetchTileUrls(EXPLORE_VIEW, BUILDINGS_TILES)
+    expect(urls).toHaveLength(9)
+    expect(new Set(urls).size).toBe(9)
+    expect(urls[0]).toMatch(/^\/tiles\/buildings\/16\/\d+\/\d+\.pbf$/)
   })
 })

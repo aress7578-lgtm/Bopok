@@ -7,7 +7,7 @@ import Map, { Layer, Marker, Source, type LayerProps, type MapRef } from 'react-
 import type { Feature, FeatureCollection, LineString, Polygon } from 'geojson'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import type { TreesLayer } from './treesLayer'
-import { RISE_MS } from '@/lib/landing-intro'
+import { PIXEL_RATIO_MAX, PIXEL_RATIO_MAX_COMPACT, RISE_ZOOM } from '@/lib/landing-intro'
 import { maxPitchForZoom } from '@/lib/map-limits'
 import { crossingBearing, focusZone, nearBuildingIds, veilPolygon } from '@/lib/map-focus'
 import type { Coord } from '@/lib/map-types'
@@ -29,6 +29,8 @@ maplibregl.setWorkerUrl(MAP_WORKER_URL)
 // 레이어는 한 번만 만들고, 높이 배율은 setPaintProperty 로만 바꾼다(솟아오르는 연출).
 const HEIGHT: ExpressionSpecification = ['coalesce', ['get', 'h'], BUILDINGS_FALLBACK_H]
 const heightScaled = (scale: number): ExpressionSpecification => ['*', HEIGHT, scale]
+// landing: 줌이 RISE_ZOOM 구간을 지나는 동안 0 → 1. 줌으로 보간하는 식이라 줌이 바뀔 때 GPU 가 처리한다(setPaintProperty 를 프레임마다 부르지 않는다)
+const heightByZoom = (scale: number): ExpressionSpecification => ['interpolate', ['linear'], ['zoom'], RISE_ZOOM[0], ['*', HEIGHT, 0], RISE_ZOOM[1], ['*', HEIGHT, scale]]
 const nearLayer: FillExtrusionLayerSpecification = {
   id: BUILDINGS_NEAR_LAYER_ID,
   type: 'fill-extrusion',
@@ -132,6 +134,8 @@ type Props = {
   // landing: 처음 카메라
   initialView?: { center: [number, number]; zoom: number; pitch: number; bearing: number }
   onMapReady?: (map: MapLibreMap) => void
+  // landing: true 인 동안은 나무(three.js)를 불러오지 않는다(첫 화면 연출이 끊기지 않게)
+  deferExtras?: boolean
   flat?: boolean
   onFail?: () => void
   routes?: FeatureCollection<LineString, RouteProps> | null
@@ -145,12 +149,15 @@ type Props = {
 
 const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
-export default function MapView({ mode = 'plan', compact = false, interactive = false, initialView, onMapReady, flat = false, onFail, routes = null, pins = [], fit = null, focusPath = null, onSelectSegment }: Props) {
+export default function MapView({ mode = 'plan', compact = false, interactive = false, initialView, onMapReady, deferExtras = false, flat = false, onFail, routes = null, pins = [], fit = null, focusPath = null, onSelectSegment }: Props) {
   const landing = mode === 'landing'
   // 처음 높이 배율(평면으로 시작하면 처음부터 0 으로 만들어 3D 가 번쩍 보이지 않게). 한 번 정하면 바꾸지 않는다
   const [initialFlat] = useState(flat)
-  const nearInit = useMemo<FillExtrusionLayerSpecification>(() => ({ ...nearLayer, paint: { ...nearLayer.paint, 'fill-extrusion-height': heightScaled(initialFlat ? 0 : 1) } }), [initialFlat])
-  const farInit = useMemo<FillExtrusionLayerSpecification>(() => ({ ...farLayer, paint: { ...farLayer.paint, 'fill-extrusion-height': heightScaled(initialFlat ? 0 : FAR_HEIGHT_SCALE) } }), [initialFlat])
+  const nearInit = useMemo<FillExtrusionLayerSpecification>(() => ({ ...nearLayer, paint: { ...nearLayer.paint, 'fill-extrusion-height': landing ? heightByZoom(1) : heightScaled(initialFlat ? 0 : 1) } }), [initialFlat, landing])
+  // landing 그림자: 건물이 솟는 줌 구간에 맞춰 옅게 나타난다(visibility 를 바꾸지 않고 줌으로 보간)
+  const shadowNearInit = useMemo<FillLayerSpecification>(() => (landing ? { ...shadowNearLayer, paint: { ...shadowNearLayer.paint, 'fill-opacity': ['interpolate', ['linear'], ['zoom'], RISE_ZOOM[0], 0, RISE_ZOOM[1], SHADOW_OPACITY] } } : shadowNearLayer), [landing])
+  const shadowFarInit = useMemo<FillLayerSpecification>(() => (landing ? { ...shadowFarLayer, paint: { ...shadowFarLayer.paint, 'fill-opacity': ['interpolate', ['linear'], ['zoom'], RISE_ZOOM[0], 0, RISE_ZOOM[1], SHADOW_FAR_OPACITY] } } : shadowFarLayer), [landing])
+  const farInit = useMemo<FillExtrusionLayerSpecification>(() => ({ ...farLayer, paint: { ...farLayer.paint, 'fill-extrusion-height': landing ? heightByZoom(FAR_HEIGHT_SCALE) : heightScaled(initialFlat ? 0 : FAR_HEIGHT_SCALE) } }), [initialFlat, landing])
   const mapRef = useRef<MapRef>(null)
   const firstFit = useRef(true)
   const [loaded, setLoaded] = useState(false)
@@ -167,7 +174,7 @@ export default function MapView({ mode = 'plan', compact = false, interactive = 
   // 나무: three.js 커스텀 레이어(B안). 건물 레이어 다음, 도로·지명 앞에 끼운다. 못 불러와도 지도는 그대로 보인다
   useEffect(() => {
     const map = mapRef.current?.getMap()
-    if (!map || !loaded || compact) return
+    if (!map || !loaded || compact || deferExtras) return
     let cancelled = false
     let added: TreesLayer | null = null
     ;(async () => {
@@ -176,9 +183,9 @@ export default function MapView({ mode = 'plan', compact = false, interactive = 
         if (!res.ok) return
         const data = await res.json()
         const { createTreesLayer } = await import('./treesLayer')
-        const layer = await createTreesLayer(data)
+        const layer = await createTreesLayer(data, landing ? { riseZoom: RISE_ZOOM } : undefined)
         if (cancelled) return
-        layer.setVisible(!flatRef.current)
+        layer.setVisible(landing || !flatRef.current)
         map.addLayer(layer, BUILDINGS_BEFORE_ID)
         treesRef.current = layer
         added = layer
@@ -191,12 +198,14 @@ export default function MapView({ mode = 'plan', compact = false, interactive = 
       if (added && map.getLayer(added.id)) map.removeLayer(added.id)
       treesRef.current = null
     }
-  }, [loaded, compact])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded, compact, deferExtras])
   // 2D 보기에서는 나무를 숨긴다
   useEffect(() => {
     flatRef.current = flat
-    treesRef.current?.setVisible(!flat)
-  }, [flat])
+    // landing 은 나무가 줌에 따라 자라서(treesLayer 의 riseZoom) 보이고 숨기는 것을 따로 하지 않는다
+    treesRef.current?.setVisible(landing || !flat)
+  }, [flat, landing])
 
   // 구간 범위는 구간이 바뀔 때만 계산한다
   const zone = useMemo(() => (focusPath ? focusZone(focusPath) : null), [focusPath])
@@ -229,15 +238,16 @@ export default function MapView({ mode = 'plan', compact = false, interactive = 
   // 건물 높이 배율: 2D 는 평면(0), 구간만 보기로 바뀌면 near 건물이 0 → 1 로 솟아오른다
   useEffect(() => {
     const map = mapRef.current?.getMap()
-    if (!map || !loaded || !map.getLayer(BUILDINGS_NEAR_LAYER_ID)) return
+    // landing 은 줌으로 보간하는 식(heightByZoom)이 높이를 정하므로 건드리지 않는다
+    if (!map || !loaded || landing || !map.getLayer(BUILDINGS_NEAR_LAYER_ID)) return
     const setScale = (near: number, far: number) => {
       map.setPaintProperty(BUILDINGS_NEAR_LAYER_ID, 'fill-extrusion-height', heightScaled(near))
       map.setPaintProperty(BUILDINGS_FAR_LAYER_ID, 'fill-extrusion-height', heightScaled(far))
     }
     if (flat) { setScale(0, 0); return }
-    // 구간만 보기와 landing(둘러보기로 내려앉을 때)에서는 0 → 1 로 솟아오른다
-    if (!(zone || landing) || reducedMotion()) { setScale(1, FAR_HEIGHT_SCALE); return }
-    const riseMs = landing ? RISE_MS : FOCUS_RISE_MS
+    // 구간만 보기에서는 0 → 1 로 솟아오른다
+    if (!zone || reducedMotion()) { setScale(1, FAR_HEIGHT_SCALE); return }
+    const riseMs = FOCUS_RISE_MS
     let raf = 0
     const start = performance.now()
     setScale(0, FAR_HEIGHT_SCALE)
@@ -250,7 +260,7 @@ export default function MapView({ mode = 'plan', compact = false, interactive = 
     return () => cancelAnimationFrame(raf)
     // 솟아오르는 연출은 구간이 바뀔 때만 다시 시작한다(타일이 더 올라와 nearIds 가 갱신돼도 다시 시작하지 않는다)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [flat, zoneKey, loaded])
+  }, [flat, zoneKey, loaded, landing])
 
   // 카메라: 전체 보기는 경로 전체, 구간만 보기는 구간 범위. 2D 는 항상 위에서 북쪽 기준
   const target = zone ? zone.bounds : fit
@@ -307,15 +317,21 @@ export default function MapView({ mode = 'plan', compact = false, interactive = 
           const id = e.features?.[0]?.properties?.segmentId
           if (typeof id === 'string') onSelectSegment?.(id)
         }}
-        onLoad={e => { e.target.setMaxPitch(maxPitchForZoom(e.target.getZoom())); setLoaded(true); onMapReady?.(e.target) }}
+        onLoad={e => {
+          e.target.setMaxPitch(maxPitchForZoom(e.target.getZoom()))
+          // landing 은 화면 전체를 매 프레임 다시 그려서 해상도를 낮춘다(고해상도 휴대폰 보호)
+          if (landing) e.target.setPixelRatio(Math.min(window.devicePixelRatio || 1, compact ? PIXEL_RATIO_MAX_COMPACT : PIXEL_RATIO_MAX))
+          setLoaded(true)
+          onMapReady?.(e.target)
+        }}
         // 지도가 뜨기 전에 난 오류(스타일·WebGL)만 실패로 본다. 타일 하나가 늦는 건 무시
         onError={() => { if (!loaded) setFailed(true) }}
         style={{ width: '100%', height: '100%' }}
       >
         <Source id={BUILDINGS_SOURCE_ID} type="vector" tiles={[BUILDINGS_TILES]} minzoom={BUILDINGS_MIN_ZOOM} maxzoom={BUILDINGS_MAX_ZOOM}>
           {/* 그림자는 건물 레이어보다 아래. 2D 에서는 건물이 평면이라 그림자도 숨긴다 */}
-          <Layer {...shadowNearLayer} filter={nearFilter} layout={{ visibility: flat || compact ? 'none' : 'visible' }} beforeId={BUILDINGS_BEFORE_ID} />
-          <Layer {...shadowFarLayer} filter={farFilter} layout={{ visibility: flat || compact ? 'none' : 'visible' }} beforeId={BUILDINGS_BEFORE_ID} />
+          <Layer {...shadowNearInit} filter={nearFilter} layout={{ visibility: (!landing && flat) || compact ? 'none' : 'visible' }} beforeId={BUILDINGS_BEFORE_ID} />
+          <Layer {...shadowFarInit} filter={farFilter} layout={{ visibility: (!landing && flat) || compact ? 'none' : 'visible' }} beforeId={BUILDINGS_BEFORE_ID} />
           <Layer {...nearInit} filter={nearFilter} beforeId={BUILDINGS_BEFORE_ID} />
           <Layer {...farInit} filter={farFilter} beforeId={BUILDINGS_BEFORE_ID} />
         </Source>
