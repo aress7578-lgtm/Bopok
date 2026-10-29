@@ -10,15 +10,19 @@ export const MAP_BEARING = -20
 
 export const MAP_MIN_ZOOM = 13
 export const MAP_MAX_ZOOM = 18
-// 시연 권역(127.370~127.400, 36.360~36.385)보다 넉넉하게 [서, 남, 동, 북]
-export const MAP_MAX_BOUNDS: [number, number, number, number] = [127.33, 36.33, 127.43, 36.41]
+// 대전 전체(건물 범위 127.248~127.554, 36.193~36.498)보다 넉넉하게 [서, 남, 동, 북]
+export const MAP_MAX_BOUNDS: [number, number, number, number] = [127.22, 36.17, 127.58, 36.52]
 
 export const MAP_FLAT_DURATION_MS = 800
 export const MAP_BG_COLOR = '#F3F1EC'
 export const MAP_FONT_FAMILY = "'Pretendard', 'Noto Sans KR', sans-serif"
 
 // 3D 건물 (scripts/build-buildings.mjs 가 만든 파일)
-export const BUILDINGS_URL = '/data/daejeon-buildings.geojson'
+// 대전 전체 건물 벡터 타일(z14~16, 그 위로 확대하면 늘려서 쓴다)
+export const BUILDINGS_TILES = '/tiles/buildings/{z}/{x}/{y}.pbf'
+export const BUILDINGS_SOURCE_LAYER = 'buildings'
+export const BUILDINGS_MIN_ZOOM = 14
+export const BUILDINGS_MAX_ZOOM = 16
 export const BUILDINGS_SOURCE_ID = 'buildings'
 export const BUILDINGS_NEAR_LAYER_ID = 'buildings-near'
 export const BUILDINGS_FAR_LAYER_ID = 'buildings-far'

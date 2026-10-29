@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "data:buildings": "node scripts/build-buildings.mjs",
+    "data:buildings": "node --max-old-space-size=8192 scripts/build-buildings.mjs",
     "map:assets": "node scripts/copy-map-assets.mjs"
   },
   "dependencies": {
@@ -22,15 +22,18 @@
   "devDependencies": {
     "@tailwindcss/turbopack": "^4",
     "@types/geojson": "^7946.0.16",
+    "@types/geojson-vt": "^3.2.5",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.4.3",
+    "geojson-vt": "^5.0.4",
     "mapshaper": "^0.7.101",
     "tailwindcss": "^4",
     "typescript": "^5",
-    "vitest": "^5.0.5"
+    "vitest": "^5.0.5",
+    "vt-pbf": "^3.1.3"
   },
   "packageManager": "pnpm@10.34.3"
 }

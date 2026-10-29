@@ -20,17 +20,18 @@ export function focusZone(path: Coord[], meters = FOCUS_BUFFER_M): FocusZone | n
 }
 
 // 범위와 겹치는 건물 fid 목록. 상자(bbox)로 먼저 거르고 겹치는 것만 정밀 계산한다
-export function nearBuildingIds(buildings: FeatureCollection, zone: FocusZone): number[] {
+// 건물 목록은 지도 타일에서 읽은 것(querySourceFeatures)이라 타일 경계에서 같은 건물이 여러 조각으로 올 수 있다 → fid 로 한 번만 센다
+export function nearBuildingIds(buildings: { features: Feature[] } | FeatureCollection, zone: FocusZone): number[] {
   const [zw, zs, ze, zn] = zone.bounds
-  const ids: number[] = []
+  const ids = new Set<number>()
   for (const f of buildings.features) {
     const fid = f.properties?.fid
     if (typeof fid !== 'number') continue
     const [w, s, e, n] = bbox(f)
     if (e < zw || w > ze || n < zs || s > zn) continue
-    if (booleanIntersects(f, zone.polygon)) ids.push(fid)
+    if (booleanIntersects(f, zone.polygon)) ids.add(fid)
   }
-  return ids
+  return [...ids].sort((a, b) => a - b)
 }
 
 // 범위 모양만 뚫린 덮개 폴리곤. outer = [서, 남, 동, 북]

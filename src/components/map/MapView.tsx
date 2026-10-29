@@ -12,7 +12,7 @@ import type { MapPin, RouteProps } from '@/lib/map-geojson'
 import {
   MAP_BEARING, MAP_BG_COLOR, MAP_CENTER, MAP_FLAT_DURATION_MS, MAP_FONT_FAMILY,
   MAP_MAX_BOUNDS, MAP_MAX_ZOOM, MAP_MIN_ZOOM, MAP_PITCH, MAP_STYLE_URL, MAP_WORKER_URL, MAP_ZOOM,
-  BUILDINGS_BEFORE_ID, BUILDINGS_FALLBACK_H, BUILDINGS_FAR_LAYER_ID, BUILDINGS_NEAR_LAYER_ID, BUILDINGS_SOURCE_ID, BUILDINGS_URL,
+  BUILDINGS_BEFORE_ID, BUILDINGS_FALLBACK_H, BUILDINGS_FAR_LAYER_ID, BUILDINGS_NEAR_LAYER_ID, BUILDINGS_MAX_ZOOM, BUILDINGS_MIN_ZOOM, BUILDINGS_SOURCE_ID, BUILDINGS_SOURCE_LAYER, BUILDINGS_TILES,
   FAR_COLOR, FAR_HEIGHT_SCALE, FAR_OPACITY, FOCUS_MOVE_MS, FOCUS_PITCH, FOCUS_RISE_MS, VEIL_OPACITY, VEIL_SOURCE_ID,
   ROUTE_BEFORE_ID, ROUTE_COLORS, ROUTE_SOURCE_ID,
 } from '@/lib/map-config'
@@ -28,6 +28,8 @@ const nearLayer: FillExtrusionLayerSpecification = {
   id: BUILDINGS_NEAR_LAYER_ID,
   type: 'fill-extrusion',
   source: BUILDINGS_SOURCE_ID,
+  'source-layer': BUILDINGS_SOURCE_LAYER,
+  minzoom: BUILDINGS_MIN_ZOOM,
   paint: {
     'fill-extrusion-height': heightScaled(1),
     'fill-extrusion-base': 0,
@@ -43,6 +45,8 @@ const farLayer: FillExtrusionLayerSpecification = {
   id: BUILDINGS_FAR_LAYER_ID,
   type: 'fill-extrusion',
   source: BUILDINGS_SOURCE_ID,
+  'source-layer': BUILDINGS_SOURCE_LAYER,
+  minzoom: BUILDINGS_MIN_ZOOM,
   paint: {
     'fill-extrusion-height': heightScaled(FAR_HEIGHT_SCALE),
     'fill-extrusion-base': 0,
@@ -113,26 +117,30 @@ export default function MapView({ flat = false, onFail, routes = null, pins = []
   const [loaded, setLoaded] = useState(false)
   const [failed, setFailed] = useState(() => !hasWebGL())
   const [cursor, setCursor] = useState('')
-  const [buildings, setBuildings] = useState<FeatureCollection | null>(null)
+  const [nearIds, setNearIds] = useState<number[] | null>(null)
 
   useEffect(() => {
     if (failed) onFail?.()
   }, [failed, onFail])
 
-  // 건물 데이터는 직접 받아서 구간 주변 건물을 계산한다. 못 받아도 바탕 지도는 그대로 보인다
-  useEffect(() => {
-    let alive = true
-    fetch(BUILDINGS_URL)
-      .then(res => (res.ok ? res.json() : Promise.reject(new Error(String(res.status)))))
-      .then((data: FeatureCollection) => { if (alive) setBuildings(data) })
-      .catch(() => {})
-    return () => { alive = false }
-  }, [])
-
-  // 구간 범위와 주변 건물은 구간이 바뀔 때만 계산한다
+  // 구간 범위는 구간이 바뀔 때만 계산한다
   const zone = useMemo(() => (focusPath ? focusZone(focusPath) : null), [focusPath])
-  const nearIds = useMemo(() => (zone && buildings ? nearBuildingIds(buildings, zone) : null), [zone, buildings])
+  const zoneKey = zone ? zone.bounds.join(',') : ''
   const veil = useMemo<FeatureCollection | Feature<Polygon>>(() => (zone ? veilPolygon(MAP_MAX_BOUNDS, zone) : EMPTY_FC), [zone])
+
+  // 구간 주변 건물: 카메라가 멈추고 타일이 다 올라왔을 때(idle) 지금 불러온 타일 속 건물만 정밀 계산한다
+  useEffect(() => {
+    const map = mapRef.current?.getMap()
+    if (!map || !loaded || !zone) return
+    const compute = () => {
+      if (!map.getSource(BUILDINGS_SOURCE_ID)) return
+      const features = map.querySourceFeatures(BUILDINGS_SOURCE_ID, { sourceLayer: BUILDINGS_SOURCE_LAYER })
+      const ids = nearBuildingIds({ features }, zone)
+      setNearIds(prev => (prev && prev.length === ids.length && prev.every((v, i) => v === ids[i]) ? prev : ids))
+    }
+    map.on('idle', compute)
+    return () => { map.off('idle', compute); setNearIds(null) }
+  }, [zone, loaded])
 
   const nearFilter = useMemo<ExpressionSpecification>(
     () => (nearIds ? ['in', ['get', 'fid'], ['literal', nearIds]] : ['has', 'fid']),
@@ -146,7 +154,7 @@ export default function MapView({ flat = false, onFail, routes = null, pins = []
   // 건물 높이 배율: 2D 는 평면(0), 구간만 보기로 바뀌면 near 건물이 0 → 1 로 솟아오른다
   useEffect(() => {
     const map = mapRef.current?.getMap()
-    if (!map || !loaded || !buildings || !map.getLayer(BUILDINGS_NEAR_LAYER_ID)) return
+    if (!map || !loaded || !map.getLayer(BUILDINGS_NEAR_LAYER_ID)) return
     const setScale = (near: number, far: number) => {
       map.setPaintProperty(BUILDINGS_NEAR_LAYER_ID, 'fill-extrusion-height', heightScaled(near))
       map.setPaintProperty(BUILDINGS_FAR_LAYER_ID, 'fill-extrusion-height', heightScaled(far))
@@ -163,7 +171,9 @@ export default function MapView({ flat = false, onFail, routes = null, pins = []
     }
     raf = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf)
-  }, [flat, zone, nearIds, loaded, buildings])
+    // 솟아오르는 연출은 구간이 바뀔 때만 다시 시작한다(타일이 더 올라와 nearIds 가 갱신돼도 다시 시작하지 않는다)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flat, zoneKey, loaded])
 
   // 카메라: 전체 보기는 경로 전체, 구간만 보기는 구간 범위. 2D 는 항상 위에서 북쪽 기준
   const target = zone ? zone.bounds : fit
@@ -211,12 +221,10 @@ export default function MapView({ flat = false, onFail, routes = null, pins = []
         onError={() => { if (!loaded) setFailed(true) }}
         style={{ width: '100%', height: '100%' }}
       >
-        {buildings && (
-          <Source id={BUILDINGS_SOURCE_ID} type="geojson" data={buildings} promoteId="fid">
-            <Layer {...nearLayer} filter={nearFilter} beforeId={BUILDINGS_BEFORE_ID} />
-            <Layer {...farLayer} filter={farFilter} beforeId={BUILDINGS_BEFORE_ID} />
-          </Source>
-        )}
+        <Source id={BUILDINGS_SOURCE_ID} type="vector" tiles={[BUILDINGS_TILES]} minzoom={BUILDINGS_MIN_ZOOM} maxzoom={BUILDINGS_MAX_ZOOM}>
+          <Layer {...nearLayer} filter={nearFilter} beforeId={BUILDINGS_BEFORE_ID} />
+          <Layer {...farLayer} filter={farFilter} beforeId={BUILDINGS_BEFORE_ID} />
+        </Source>
         {/* 구간 범위 밖을 흐리게 덮는 흰 덮개. 범위 모양만 뚫려 있다 */}
         <Source id={VEIL_SOURCE_ID} type="geojson" data={veil}>
           <Layer {...veilLayer} beforeId={ROUTE_BEFORE_ID} />

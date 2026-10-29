@@ -1,12 +1,27 @@
-import fs from 'node:fs'
-import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import type { FeatureCollection } from 'geojson'
+import type { Feature, FeatureCollection, Polygon } from 'geojson'
 import { segmentGeo } from './demo-geo'
 import { crossingBearing, focusZone, nearBuildingIds, veilPolygon } from './map-focus'
 import { MAP_MAX_BOUNDS } from './map-config'
 
-const buildings = JSON.parse(fs.readFileSync(path.join(__dirname, '../../public/data/daejeon-buildings.geojson'), 'utf8')) as FeatureCollection
+// [경도, 위도] 중심에서 한 변이 약 20m 인 정사각형 건물
+const building = (fid: number, [lon, lat]: [number, number]): Feature<Polygon> => {
+  const d = 0.0001
+  return {
+    type: 'Feature',
+    properties: { fid },
+    geometry: { type: 'Polygon', coordinates: [[[lon - d, lat - d], [lon + d, lat - d], [lon + d, lat + d], [lon - d, lat + d], [lon - d, lat - d]]] },
+  }
+}
+const [mx, my] = segmentGeo.hb3.path[1] // 구간 가운데
+const buildings: FeatureCollection = {
+  type: 'FeatureCollection',
+  features: [
+    building(1, [mx, my + 0.0002]),   // 구간 바로 옆 (약 20m)
+    building(2, [mx + 0.002, my]),    // 구간에서 약 180m 떨어짐
+    building(3, [mx, my + 0.0015]),   // 구간 끝에서 약 110m 떨어짐 (60m 밖, 130m 안)
+  ],
+}
 
 describe('focusZone', () => {
   it('경로 주변 범위의 상자가 경로를 감싼다', () => {
@@ -24,19 +39,19 @@ describe('focusZone', () => {
 })
 
 describe('nearBuildingIds', () => {
-  it('범위 밖 건물은 빼고, 넓힐수록 늘어난다', () => {
-    const near60 = nearBuildingIds(buildings, focusZone(segmentGeo.hb3.path, 60)!)
-    const near400 = nearBuildingIds(buildings, focusZone(segmentGeo.hb3.path, 400)!)
-    expect(near60.length).toBeLessThan(buildings.features.length)
-    expect(near400.length).toBeGreaterThanOrEqual(near60.length)
-    expect(new Set(near60).size).toBe(near60.length)
+  it('60m 안 건물만 고르고, 범위를 넓히면 늘어난다', () => {
+    expect(nearBuildingIds(buildings, focusZone(segmentGeo.hb3.path, 60)!)).toEqual([1])
+    expect(nearBuildingIds(buildings, focusZone(segmentGeo.hb3.path, 130)!)).toEqual([1, 3])
   })
 
-  it('상자가 겹쳐도 실제로 안 닿으면 제외한다', () => {
-    const zone = focusZone(segmentGeo.hb3.path, 60)!
-    const ids = new Set(nearBuildingIds(buildings, zone))
-    const far = buildings.features.filter(f => !ids.has(f.properties!.fid))
-    expect(far.length).toBeGreaterThan(0)
+  it('타일 경계에서 조각난 건물은 한 번만 센다', () => {
+    const pieces: FeatureCollection = { type: 'FeatureCollection', features: [building(1, [mx, my + 0.0002]), building(1, [mx, my + 0.0002])] }
+    expect(nearBuildingIds(pieces, focusZone(segmentGeo.hb3.path, 60)!)).toEqual([1])
+  })
+
+  it('fid 가 없는 조각은 무시한다', () => {
+    const noFid: FeatureCollection = { type: 'FeatureCollection', features: [{ ...building(1, [mx, my]), properties: {} }] }
+    expect(nearBuildingIds(noFid, focusZone(segmentGeo.hb3.path)!)).toEqual([])
   })
 })
 

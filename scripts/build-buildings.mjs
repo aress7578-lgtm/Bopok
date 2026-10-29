@@ -1,13 +1,19 @@
-// 대전 GIS건물통합정보(SHP) → 시연권역 3D 건물용 GeoJSON
+// 대전 GIS건물통합정보(SHP) → 3D 건물용 벡터 타일(public/tiles/buildings/{z}/{x}/{y}.pbf)
 // 실행: pnpm data:buildings   (원본은 data/raw/daejeon-buildings/ 에 둔다)
 import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import mapshaper from 'mapshaper'
+import geojsonvt from 'geojson-vt'
+import vtpbf from 'vt-pbf'
 
 // ───────── 조절 값 ─────────
-const BBOX = [127.370, 36.360, 127.400, 36.385] // WGS84 [경도min, 위도min, 경도max, 위도max]
+// WGS84 [경도min, 위도min, 경도max, 위도max]. null 이면 대전 전체. 범위를 주면 중심점이 안에 있는 건물만 통째로 남긴다
+const BBOX = null
+const TILE_MIN_ZOOM = 14           // 이 줌부터 타일을 만든다(건물 레이어 minzoom 과 같게)
+const TILE_MAX_ZOOM = 16           // 이보다 크게 확대하면 지도가 이 타일을 늘려서 쓴다
+const TILE_EXTENT = 4096
 const MIN_AREA_M2 = 15          // 이보다 작은 건물(창고·부속 구조물)은 제외
 const DEFAULT_H = 6             // 높이·층수 둘 다 없을 때 (약 2층)
 const RATIO_MIN = 2             // height ÷ floors 가 이 값(m) 미만이면 이상값
@@ -19,7 +25,7 @@ const NAME = 'AL_D010_30_20261009'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const RAW = path.join(root, 'data/raw/daejeon-buildings', NAME)
-const OUT = path.join(root, 'public/data/daejeon-buildings.geojson')
+const OUT_DIR = path.join(root, 'public/tiles/buildings')
 
 // ───────── 좌표 변환: WGS84 → EPSG:5186 (GRS80 횡메르카토르) ─────────
 const PROJ5186 = '+proj=tmerc +lat_0=38 +lon_0=127 +k=1 +x_0=200000 +y_0=600000 +ellps=GRS80 +units=m +no_defs'
@@ -37,10 +43,11 @@ function toTM(lon, lat) {
   return [x, y]
 }
 // 권역(WGS84 사각형)을 원본 좌표계로 옮긴 사각형. 중심점이 이 안에 있으면 건물을 통째로 남긴다.
-const QUAD = [[BBOX[0], BBOX[1]], [BBOX[2], BBOX[1]], [BBOX[2], BBOX[3]], [BBOX[0], BBOX[3]]].map(([lo, la]) => toTM(lo, la))
-const QX = [Math.min(...QUAD.map(p => p[0])), Math.max(...QUAD.map(p => p[0]))]
-const QY = [Math.min(...QUAD.map(p => p[1])), Math.max(...QUAD.map(p => p[1]))]
+const QUAD = BBOX ? [[BBOX[0], BBOX[1]], [BBOX[2], BBOX[1]], [BBOX[2], BBOX[3]], [BBOX[0], BBOX[3]]].map(([lo, la]) => toTM(lo, la)) : null
+const QX = QUAD ? [Math.min(...QUAD.map(p => p[0])), Math.max(...QUAD.map(p => p[0]))] : [-Infinity, Infinity]
+const QY = QUAD ? [Math.min(...QUAD.map(p => p[1])), Math.max(...QUAD.map(p => p[1]))] : [-Infinity, Infinity]
 function inQuad(x, y) {
+  if (!QUAD) return true
   let sign = 0
   for (let i = 0; i < 4; i++) {
     const [x1, y1] = QUAD[i], [x2, y2] = QUAD[(i + 1) % 4]
@@ -195,23 +202,38 @@ const out = await mapshaper.applyCommands(
   `-i in.json -proj wgs84 from="${PROJ5186}" -o out.json format=geojson rfc7946 precision=0.000001`,
   { 'in.json': JSON.stringify(geo) },
 )
-const outText = Buffer.from(out['out.json']).toString('utf8')
-fs.mkdirSync(path.dirname(OUT), { recursive: true })
-fs.writeFileSync(OUT, outText)
+const parsed = JSON.parse(Buffer.from(out['out.json']).toString('utf8'))
+const n = parsed.features.length
+
+// 5) 벡터 타일. 타일에는 지도가 읽는 속성(fid, h, floors)만 싣는다
+for (const f of parsed.features) f.properties = { fid: f.properties.fid, h: f.properties.h, floors: f.properties.floors }
+const index = new geojsonvt(parsed, { minZoom: 0, maxZoom: TILE_MAX_ZOOM, indexMaxZoom: TILE_MAX_ZOOM, indexMaxPoints: 0, extent: TILE_EXTENT, buffer: 64, tolerance: 3 })
+fs.rmSync(OUT_DIR, { recursive: true, force: true })
+const hash = crypto.createHash('sha256')
+let tileCount = 0, tileBytes = 0
+const coords = index.tileCoords.filter(c => c.z >= TILE_MIN_ZOOM).sort((a, b) => a.z - b.z || a.x - b.x || a.y - b.y)
+for (const { z, x, y } of coords) {
+  const tile = index.getTile(z, x, y)
+  if (!tile || tile.features.length === 0) continue
+  const buf = Buffer.from(vtpbf.fromGeojsonVt({ buildings: tile }, { version: 2, extent: TILE_EXTENT }))
+  const file = path.join(OUT_DIR, String(z), String(x), `${y}.pbf`)
+  fs.mkdirSync(path.dirname(file), { recursive: true })
+  fs.writeFileSync(file, buf)
+  hash.update(`${z}/${x}/${y}:`).update(buf)
+  tileCount++; tileBytes += buf.length
+}
 
 // ───────── 결과 요약 ─────────
-const parsed = JSON.parse(outText)
 let lo0 = Infinity, la0 = Infinity, lo1 = -Infinity, la1 = -Infinity
 const walk = c => (typeof c[0] === 'number' ? ((lo0 = Math.min(lo0, c[0])), (lo1 = Math.max(lo1, c[0])), (la0 = Math.min(la0, c[1])), (la1 = Math.max(la1, c[1]))) : c.forEach(walk))
 parsed.features.forEach(f => walk(f.geometry.coordinates))
-const n = parsed.features.length
-const bytes = fs.statSync(OUT).size
-console.log(`원본 건물 ${total.toLocaleString()}개 → 권역 근처 후보 ${nearCount.toLocaleString()}개 → 중심점이 권역 안 ${inAreaCount.toLocaleString()}개`)
-console.log(`면적 ${MIN_AREA_M2}㎡ 미만 제외 ${tooSmall}개 → 남은 건물 ${n.toLocaleString()}개`)
+fs.writeFileSync(path.join(OUT_DIR, 'meta.json'), JSON.stringify({ count: n, bounds: [lo0, la0, lo1, la1].map(v => Math.round(v * 1e6) / 1e6), minzoom: TILE_MIN_ZOOM, maxzoom: TILE_MAX_ZOOM }))
+console.log(`원본 건물 ${total.toLocaleString()}개 → 권역 근처 후보 ${nearCount.toLocaleString()}개 → ${BBOX ? '중심점이 권역 안' : '대전 전체'} ${inAreaCount.toLocaleString()}개`)
+console.log(`면적 ${MIN_AREA_M2}㎡ 미만 제외 ${tooSmall.toLocaleString()}개 → 남은 건물 ${n.toLocaleString()}개`)
 console.log(`층고 중앙값: 저층(1~${LOW_FLOORS_MAX}층) ${lowH.toFixed(2)}m (표본 ${lowRatios.length.toLocaleString()}), 고층(${LOW_FLOORS_MAX + 1}층~) ${highH.toFixed(2)}m (표본 ${highRatios.length.toLocaleString()})`)
 console.log(`hSource: height ${srcCount.height ?? 0}, floors ${srcCount.floors ?? 0}, default ${srcCount.default ?? 0}`)
 const withFloors = parsed.features.filter(f => f.properties.floors !== null).length
 console.log(`floors 있는 비율 ${(withFloors / n * 100).toFixed(1)}% (${withFloors}/${n})`)
 console.log(`좌표 범위 bbox [${lo0.toFixed(6)}, ${la0.toFixed(6)}, ${lo1.toFixed(6)}, ${la1.toFixed(6)}]`)
-console.log(`파일 ${path.relative(root, OUT)}  ${(bytes / 1024).toFixed(0)}KB  sha256 ${crypto.createHash('sha256').update(outText).digest('hex').slice(0, 16)}`)
-if (bytes > WARN_BYTES) console.warn('⚠ 10MB 를 넘었어요. 좌표 자리수·BBOX 를 줄이거나 작은 건물 기준을 올려보세요.')
+console.log(`타일 z${TILE_MIN_ZOOM}~${TILE_MAX_ZOOM} ${tileCount.toLocaleString()}개  ${(tileBytes / 1024 / 1024).toFixed(1)}MB  ${path.relative(root, OUT_DIR)}  sha256 ${hash.digest('hex').slice(0, 16)}`)
+if (tileBytes > WARN_BYTES * 8) console.warn('⚠ 타일 합계가 80MB 를 넘었어요. TILE_MAX_ZOOM 을 낮추거나 tolerance 를 올려보세요.')
