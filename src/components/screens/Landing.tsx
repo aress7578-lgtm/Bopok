@@ -1,8 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { CityScene } from '@/components/CityScene'
-import { HeroMapBackground } from '@/components/landing/HeroMapBackground'
+import { Hero } from '@/components/landing/Hero'
 import { startDemo, startFresh } from '@/lib/plan-storage'
 
 export function Landing() {
@@ -23,18 +22,7 @@ export function Landing() {
         <button className="button small" onClick={onStart}>시작하기</button>
       </nav>
 
-      <section className="hero">
-        <HeroMapBackground />
-        <div className="hero-copy">
-          <div className="pin" aria-hidden="true"><span /></div>
-          <h1>부모님 보폭에 맞춘<br />하루 여행</h1>
-          <p className="lead">주차장에서 입구, 관람길 계단까지 계산해서<br className="desktop" /> 부모님이 편하게 걸을 수 있는 일정으로 고쳐드려요.</p>
-          <div className="hero-actions">
-            <button className="button hero-start" onClick={onStart}>지금 시작하기</button>
-          </div>
-        </div>
-        <CityScene />
-      </section>
+      <Hero onStart={onStart} />
 
       <section className="section" id="about">
         <div className="section-heading"><p className="eyebrow">놓치기 쉬운 이동까지</p><h2>지도 앱의 ‘도보 15분’엔<br />계단과 관람길이 빠져 있어요</h2><p>보폭은 목적지 사이뿐 아니라, 도착한 뒤 부모님이 실제로 걷는 길까지 살펴봐요.</p></div>

@@ -21,7 +21,7 @@ export type RouteProps = {
 
 export type MapPin = {
   id: string
-  kind: 'start' | 'rest' | 'stairs' | 'toilet'
+  kind: 'start' | 'rest' | 'stairs' | 'toilet' | 'place'
   coord: Coord
   label: string
   indoor?: boolean

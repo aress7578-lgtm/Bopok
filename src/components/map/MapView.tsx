@@ -2,11 +2,12 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as maplibregl from 'maplibre-gl'
-import type { ExpressionSpecification, FillExtrusionLayerSpecification, FillLayerSpecification } from 'maplibre-gl'
+import type { Map as MapLibreMap, ExpressionSpecification, FillExtrusionLayerSpecification, FillLayerSpecification } from 'maplibre-gl'
 import Map, { Layer, Marker, Source, type LayerProps, type MapRef } from 'react-map-gl/maplibre'
 import type { Feature, FeatureCollection, LineString, Polygon } from 'geojson'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import type { TreesLayer } from './treesLayer'
+import { RISE_MS } from '@/lib/landing-intro'
 import { maxPitchForZoom } from '@/lib/map-limits'
 import { crossingBearing, focusZone, nearBuildingIds, veilPolygon } from '@/lib/map-focus'
 import type { Coord } from '@/lib/map-types'
@@ -113,7 +114,24 @@ function BenchIcon() {
   )
 }
 
+// 휴대폰에서 지도를 두 손가락으로 움직이라는 안내(협력 제스처) 한국어 문구
+const COOPERATIVE_LOCALE = {
+  'CooperativeGesturesHandler.WindowsHelpText': 'Ctrl 키를 누른 채 스크롤하면 지도를 확대·축소해요',
+  'CooperativeGesturesHandler.MacHelpText': '⌘ 키를 누른 채 스크롤하면 지도를 확대·축소해요',
+  'CooperativeGesturesHandler.MobileHelpText': '두 손가락으로 지도를 움직이세요',
+}
+
 type Props = {
+  // 'landing': S1 시작 화면 배경. 판정 경로·계단 핀은 그리지 않고, 카메라는 밖(onMapReady 로 받은 지도)에서 조종한다.
+  // 스크롤로 확대·더블클릭 확대는 끄고(페이지 스크롤을 막지 않게), 끌어서 움직이기는 interactive 일 때만 켠다
+  mode?: 'plan' | 'landing'
+  // landing: 휴대폰. 두 손가락으로 지도 이동(협력 제스처), 나무·그림자 레이어 끔
+  compact?: boolean
+  // landing: 끌기·회전 허용
+  interactive?: boolean
+  // landing: 처음 카메라
+  initialView?: { center: [number, number]; zoom: number; pitch: number; bearing: number }
+  onMapReady?: (map: MapLibreMap) => void
   flat?: boolean
   onFail?: () => void
   routes?: FeatureCollection<LineString, RouteProps> | null
@@ -127,7 +145,12 @@ type Props = {
 
 const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
-export default function MapView({ flat = false, onFail, routes = null, pins = [], fit = null, focusPath = null, onSelectSegment }: Props) {
+export default function MapView({ mode = 'plan', compact = false, interactive = false, initialView, onMapReady, flat = false, onFail, routes = null, pins = [], fit = null, focusPath = null, onSelectSegment }: Props) {
+  const landing = mode === 'landing'
+  // 처음 높이 배율(평면으로 시작하면 처음부터 0 으로 만들어 3D 가 번쩍 보이지 않게). 한 번 정하면 바꾸지 않는다
+  const [initialFlat] = useState(flat)
+  const nearInit = useMemo<FillExtrusionLayerSpecification>(() => ({ ...nearLayer, paint: { ...nearLayer.paint, 'fill-extrusion-height': heightScaled(initialFlat ? 0 : 1) } }), [initialFlat])
+  const farInit = useMemo<FillExtrusionLayerSpecification>(() => ({ ...farLayer, paint: { ...farLayer.paint, 'fill-extrusion-height': heightScaled(initialFlat ? 0 : FAR_HEIGHT_SCALE) } }), [initialFlat])
   const mapRef = useRef<MapRef>(null)
   const firstFit = useRef(true)
   const [loaded, setLoaded] = useState(false)
@@ -144,7 +167,7 @@ export default function MapView({ flat = false, onFail, routes = null, pins = []
   // 나무: three.js 커스텀 레이어(B안). 건물 레이어 다음, 도로·지명 앞에 끼운다. 못 불러와도 지도는 그대로 보인다
   useEffect(() => {
     const map = mapRef.current?.getMap()
-    if (!map || !loaded) return
+    if (!map || !loaded || compact) return
     let cancelled = false
     let added: TreesLayer | null = null
     ;(async () => {
@@ -168,7 +191,7 @@ export default function MapView({ flat = false, onFail, routes = null, pins = []
       if (added && map.getLayer(added.id)) map.removeLayer(added.id)
       treesRef.current = null
     }
-  }, [loaded])
+  }, [loaded, compact])
   // 2D 보기에서는 나무를 숨긴다
   useEffect(() => {
     flatRef.current = flat
@@ -212,12 +235,14 @@ export default function MapView({ flat = false, onFail, routes = null, pins = []
       map.setPaintProperty(BUILDINGS_FAR_LAYER_ID, 'fill-extrusion-height', heightScaled(far))
     }
     if (flat) { setScale(0, 0); return }
-    if (!zone || reducedMotion()) { setScale(1, FAR_HEIGHT_SCALE); return }
+    // 구간만 보기와 landing(둘러보기로 내려앉을 때)에서는 0 → 1 로 솟아오른다
+    if (!(zone || landing) || reducedMotion()) { setScale(1, FAR_HEIGHT_SCALE); return }
+    const riseMs = landing ? RISE_MS : FOCUS_RISE_MS
     let raf = 0
     const start = performance.now()
     setScale(0, FAR_HEIGHT_SCALE)
     const tick = (now: number) => {
-      const t = Math.min(1, (now - start) / FOCUS_RISE_MS)
+      const t = Math.min(1, (now - start) / riseMs)
       setScale(1 - (1 - t) ** 3, FAR_HEIGHT_SCALE) // ease-out
       if (t < 1) raf = requestAnimationFrame(tick)
     }
@@ -234,7 +259,7 @@ export default function MapView({ flat = false, onFail, routes = null, pins = []
   const pitch = flat ? 0 : zone ? FOCUS_PITCH : MAP_PITCH
   useEffect(() => {
     const map = mapRef.current
-    if (!map || !loaded) return
+    if (!map || !loaded || landing) return
     const duration = reducedMotion() || firstFit.current ? 0 : zone ? FOCUS_MOVE_MS : MAP_FLAT_DURATION_MS
     if (target) {
       map.fitBounds([[target[0], target[1]], [target[2], target[3]]], { padding: 48, maxZoom: 18, pitch, bearing, duration })
@@ -246,7 +271,8 @@ export default function MapView({ flat = false, onFail, routes = null, pins = []
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loaded, targetKey, pitch, bearing])
 
-  if (failed) return <div style={{ ...placeholder, width: '100%', height: '100%' }} role="status">지도를 불러오지 못했어요. 목록으로 보여드릴게요</div>
+  // landing 은 문구 없이 바탕색만 보이게 한다(부모가 onFail 로 알아서 대체 화면을 보여준다)
+  if (failed) return landing ? <div style={{ background: MAP_BG_COLOR, width: '100%', height: '100%' }} /> : <div style={{ ...placeholder, width: '100%', height: '100%' }} role="status">지도를 불러오지 못했어요. 목록으로 보여드릴게요</div>
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', background: MAP_BG_COLOR }}>
@@ -254,7 +280,16 @@ export default function MapView({ flat = false, onFail, routes = null, pins = []
         ref={mapRef}
         mapLib={maplibregl}
         mapStyle={MAP_STYLE_URL}
-        initialViewState={{ ...MAP_CENTER, zoom: MAP_ZOOM, pitch: MAP_PITCH, bearing: MAP_BEARING }}
+        initialViewState={initialView ? { longitude: initialView.center[0], latitude: initialView.center[1], zoom: initialView.zoom, pitch: initialView.pitch, bearing: initialView.bearing } : { ...MAP_CENTER, zoom: MAP_ZOOM, pitch: MAP_PITCH, bearing: MAP_BEARING }}
+        scrollZoom={!landing}
+        doubleClickZoom={!landing}
+        keyboard={!landing}
+        dragPan={landing ? interactive : true}
+        dragRotate={landing ? interactive : true}
+        touchZoomRotate={landing ? interactive : true}
+        touchPitch={landing ? interactive : true}
+        cooperativeGestures={landing && compact}
+        locale={COOPERATIVE_LOCALE}
         minZoom={MAP_MIN_ZOOM}
         maxZoom={MAP_MAX_ZOOM}
         maxBounds={MAP_MAX_BOUNDS}
@@ -272,17 +307,17 @@ export default function MapView({ flat = false, onFail, routes = null, pins = []
           const id = e.features?.[0]?.properties?.segmentId
           if (typeof id === 'string') onSelectSegment?.(id)
         }}
-        onLoad={e => { e.target.setMaxPitch(maxPitchForZoom(e.target.getZoom())); setLoaded(true) }}
+        onLoad={e => { e.target.setMaxPitch(maxPitchForZoom(e.target.getZoom())); setLoaded(true); onMapReady?.(e.target) }}
         // 지도가 뜨기 전에 난 오류(스타일·WebGL)만 실패로 본다. 타일 하나가 늦는 건 무시
         onError={() => { if (!loaded) setFailed(true) }}
         style={{ width: '100%', height: '100%' }}
       >
         <Source id={BUILDINGS_SOURCE_ID} type="vector" tiles={[BUILDINGS_TILES]} minzoom={BUILDINGS_MIN_ZOOM} maxzoom={BUILDINGS_MAX_ZOOM}>
           {/* 그림자는 건물 레이어보다 아래. 2D 에서는 건물이 평면이라 그림자도 숨긴다 */}
-          <Layer {...shadowNearLayer} filter={nearFilter} layout={{ visibility: flat ? 'none' : 'visible' }} beforeId={BUILDINGS_BEFORE_ID} />
-          <Layer {...shadowFarLayer} filter={farFilter} layout={{ visibility: flat ? 'none' : 'visible' }} beforeId={BUILDINGS_BEFORE_ID} />
-          <Layer {...nearLayer} filter={nearFilter} beforeId={BUILDINGS_BEFORE_ID} />
-          <Layer {...farLayer} filter={farFilter} beforeId={BUILDINGS_BEFORE_ID} />
+          <Layer {...shadowNearLayer} filter={nearFilter} layout={{ visibility: flat || compact ? 'none' : 'visible' }} beforeId={BUILDINGS_BEFORE_ID} />
+          <Layer {...shadowFarLayer} filter={farFilter} layout={{ visibility: flat || compact ? 'none' : 'visible' }} beforeId={BUILDINGS_BEFORE_ID} />
+          <Layer {...nearInit} filter={nearFilter} beforeId={BUILDINGS_BEFORE_ID} />
+          <Layer {...farInit} filter={farFilter} beforeId={BUILDINGS_BEFORE_ID} />
         </Source>
         {/* 구간 범위 밖을 흐리게 덮는 덮개. 범위 모양만 뚫려 있다 */}
         <Source id={VEIL_SOURCE_ID} type="geojson" data={veil}>
@@ -303,7 +338,9 @@ export default function MapView({ flat = false, onFail, routes = null, pins = []
         </Source>
         {pins.map(pin => (
           <Marker key={pin.id} longitude={pin.coord[0]} latitude={pin.coord[1]} anchor={pin.kind === 'stairs' ? 'bottom' : 'center'} style={{ zIndex: pin.kind === 'stairs' ? 3 : 2 }}>
-            {pin.kind === 'stairs' ? (
+            {pin.kind === 'place' ? (
+              <div className="map-pin pin-place" role="img" aria-label={pin.label}><span className="pin-dot" /><span className="pin-name">{pin.label}</span></div>
+            ) : pin.kind === 'stairs' ? (
               <button type="button" className="map-pin pin-stairs" style={{ width: 'max-content' }} onClick={e => { e.stopPropagation(); if (pin.segmentId) onSelectSegment?.(pin.segmentId) }}>{pin.label}</button>
             ) : pin.kind === 'start' ? (
               <div className="map-pin pin-start" role="img" aria-label={pin.label}>P</div>
@@ -316,7 +353,7 @@ export default function MapView({ flat = false, onFail, routes = null, pins = []
           </Marker>
         ))}
       </Map>
-      {!loaded && <div style={{ ...placeholder, position: 'absolute', inset: 0 }} role="status">지도를 불러오는 중이에요</div>}
+      {!loaded && !landing && <div style={{ ...placeholder, position: 'absolute', inset: 0 }} role="status">지도를 불러오는 중이에요</div>}
     </div>
   )
 }
