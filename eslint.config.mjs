@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // 복사해 둔 외부 파일(maplibre 워커 등)
+    "public/**",
   ]),
 ]);
 

@@ -70,3 +70,4 @@ footer{border-top:1px solid #eee;max-width:1120px;margin:auto;padding:30px 20px 
 
 .hero-start{min-width:320px}
 @media(max-width:760px){.hero-start{min-width:0;width:100%;max-width:320px}}
+.route-map.map-live{background:#F3F1EC;border-radius:18px;height:320px}.route-map.map-live:before,.route-map.map-live:after{display:none}.map-loading{height:320px;display:grid;place-items:center;background:#F3F1EC;color:#8A847B;font-size:13px}.route-map.map-live .map-label{pointer-events:auto}.map-flat{border:0;background:none;padding:0;font:inherit;color:#1a73e8;font-weight:700}
