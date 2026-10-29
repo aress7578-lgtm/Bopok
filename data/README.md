@@ -60,15 +60,17 @@ MapLibre 에는 건물 그림자 기능이 없어서 바닥에 그림자 모양�
 - 대전 전체라 GeoJSON 한 파일(`daejeon-shadows.geojson`)이 아니라 건물과 같은 타일에 `shadows` 레이어로 함께 담습니다. 속성은 `fid`(건물과 같은 값)
 - 지도에서는 색 `#CFC6DC`, 진하기 0.35(구간만 보기에서 범위 밖 건물의 그림자는 0.12)
 
-## 나무 (`public/data/daejeon-trees.geojson`, 시연 권역만)
+## 나무 (`public/data/daejeon-trees.json`, 시연 권역만)
 
 `scripts/build-trees.mjs` (`pnpm data:trees`, `pnpm data:buildings` 가 이어서 실행)
 
 - 공원·숲·잔디 면은 OpenStreetMap(Overpass API)에서 시연 권역(`TREE_BBOX`)만 한 번 받아 `data/raw/osm-green-demo.json` 에 저장해서 씁니다(면 136개)
 - 면적 400㎡당 한 그루 정도로, 나무 사이 최소 12m, 권역 전체 최대 3,000그루(넘으면 난수로 골고루 덜어냄, 시드 고정이라 결과가 같음)
-- 나무마다 줄기(반지름 0.6m, 높이 0~3m, `#B9A99A`)와 수관(반지름 3~4.5m, base 3m, 꼭대기 8~11m, `#B5C7A0`~`#A3BA8E` 사이 랜덤) 원 도형 두 개
-- 한계: 건물 바닥 안에 나무가 놓일 수 있습니다(공원 안 건물 제외는 아직 안 함)
-- **TODO(B안)**: maplibre 커스텀 레이어 + three.js InstancedMesh 로 같은 위치에 구(수관)·원기둥(줄기)을 그려 동글동글하게
+- **건물 바닥 위에는 놓지 않습니다.** 수관이 건물에 닿을 만큼 가까운 점은 뺍니다(`data/raw/derived/buildings-footprints.json`, `pnpm data:buildings` 가 건물을 처리하면서 만듭니다). 현재 87그루 제외
+- 출력은 나무 점 데이터입니다: `origin`(권역 중심 경도·위도)과 `trees`(각 `[동쪽 m, 북쪽 m, 수관 반지름 m(3~4.5), 꼭대기 높이 m(8~11), 수관 색(#B5C7A0~#A3BA8E 사이)]`). 약 100KB
+- 지도(`src/components/map/treesLayer.ts`)는 maplibre 커스텀 레이어 + three.js 로 점마다 구(수관, 위아래로 살짝 눌림)와 원기둥(줄기, 반지름 0.6m)을 InstancedMesh 로 한 번에 그립니다. 부드러운 빛(주변광 + 약한 방향광)만 쓰고 그림자는 없습니다. 건물 레이어와 같은 깊이 버퍼를 써서 건물 뒤의 나무는 가려집니다. 2D 보기에서는 숨깁니다
+- 빛 세기는 `TREE_LIGHT` (three 는 람베르트 빛을 1/π 로 나눠서 쓰므로 코드에서 π 를 곱해 "색 × 세기" 로 맞춤)
+- 한계: 시연 권역 밖 공원에는 나무가 없습니다. 지도 범위를 넓히려면 `TREE_BBOX` 를 키우고 `TREE_MAX_COUNT` 도 함께 조정
 
 ## 지도 색 (`pnpm map:style`)
 

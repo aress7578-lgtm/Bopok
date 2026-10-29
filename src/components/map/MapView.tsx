@@ -6,6 +6,7 @@ import type { ExpressionSpecification, FillExtrusionLayerSpecification, FillLaye
 import Map, { Layer, Marker, Source, type LayerProps, type MapRef } from 'react-map-gl/maplibre'
 import type { Feature, FeatureCollection, LineString, Polygon } from 'geojson'
 import 'maplibre-gl/dist/maplibre-gl.css'
+import type { TreesLayer } from './treesLayer'
 import { crossingBearing, focusZone, nearBuildingIds, veilPolygon } from '@/lib/map-focus'
 import type { Coord } from '@/lib/map-types'
 import type { MapPin, RouteProps } from '@/lib/map-geojson'
@@ -15,7 +16,7 @@ import {
   BUILDINGS_BEFORE_ID, BUILDINGS_FALLBACK_H, BUILDINGS_FAR_LAYER_ID, BUILDINGS_NEAR_LAYER_ID, BUILDINGS_MAX_ZOOM, BUILDINGS_MIN_ZOOM, BUILDINGS_SOURCE_ID, BUILDINGS_SOURCE_LAYER, BUILDINGS_TILES,
   FAR_COLOR, FAR_HEIGHT_SCALE, FAR_OPACITY, FOCUS_MOVE_MS, FOCUS_PITCH, FOCUS_RISE_MS, VEIL_OPACITY, VEIL_SOURCE_ID,
   BUILDINGS_SHADOW_FAR_LAYER_ID, BUILDINGS_SHADOW_NEAR_LAYER_ID, BUILDINGS_SHADOW_SOURCE_LAYER, PALETTE, SHADOW_FAR_OPACITY, SHADOW_OPACITY,
-  TREES_MIN_ZOOM, TREES_SOURCE_ID, TREES_URL, TREE_TRUNK_HEIGHT_M,
+  TREES_URL,
   ROUTE_BEFORE_ID, ROUTE_COLORS, ROUTE_SOURCE_ID,
 } from '@/lib/map-config'
 
@@ -66,15 +67,6 @@ const shadowNearLayer: FillLayerSpecification = {
 const shadowFarLayer: FillLayerSpecification = {
   id: BUILDINGS_SHADOW_FAR_LAYER_ID, type: 'fill', source: BUILDINGS_SOURCE_ID, 'source-layer': BUILDINGS_SHADOW_SOURCE_LAYER, minzoom: BUILDINGS_MIN_ZOOM,
   paint: { 'fill-color': PALETTE.shadow, 'fill-opacity': SHADOW_FAR_OPACITY, 'fill-antialias': true },
-}
-// 나무(A안): 줄기와 수관을 fill-extrusion 원기둥으로. B안(three.js 구 모양)은 map-config.ts 의 TODO 참고
-const trunkLayer: FillExtrusionLayerSpecification = {
-  id: 'trees-trunk', type: 'fill-extrusion', source: TREES_SOURCE_ID, minzoom: TREES_MIN_ZOOM, filter: ['==', ['get', 'kind'], 'trunk'],
-  paint: { 'fill-extrusion-height': TREE_TRUNK_HEIGHT_M, 'fill-extrusion-base': 0, 'fill-extrusion-color': PALETTE.trunk, 'fill-extrusion-vertical-gradient': false, 'fill-extrusion-opacity': 1 },
-}
-const crownLayer: FillExtrusionLayerSpecification = {
-  id: 'trees-crown', type: 'fill-extrusion', source: TREES_SOURCE_ID, minzoom: TREES_MIN_ZOOM, filter: ['==', ['get', 'kind'], 'crown'],
-  paint: { 'fill-extrusion-height': ['get', 'h'], 'fill-extrusion-base': TREE_TRUNK_HEIGHT_M, 'fill-extrusion-color': ['get', 'c'], 'fill-extrusion-vertical-gradient': false, 'fill-extrusion-opacity': 1 },
 }
 const veilLayer: FillLayerSpecification = { id: 'focus-veil', type: 'fill', source: VEIL_SOURCE_ID, paint: { 'fill-color': PALETTE.background, 'fill-opacity': VEIL_OPACITY } }
 // 건물 가장자리를 부드럽게(maplibre 기본값은 antialias: false)
@@ -140,11 +132,47 @@ export default function MapView({ flat = false, onFail, routes = null, pins = []
   const [loaded, setLoaded] = useState(false)
   const [failed, setFailed] = useState(() => !hasWebGL())
   const [cursor, setCursor] = useState('')
+  const treesRef = useRef<TreesLayer | null>(null)
+  const flatRef = useRef(flat)
   const [nearIds, setNearIds] = useState<number[] | null>(null)
 
   useEffect(() => {
     if (failed) onFail?.()
   }, [failed, onFail])
+
+  // 나무: three.js 커스텀 레이어(B안). 건물 레이어 다음, 도로·지명 앞에 끼운다. 못 불러와도 지도는 그대로 보인다
+  useEffect(() => {
+    const map = mapRef.current?.getMap()
+    if (!map || !loaded) return
+    let cancelled = false
+    let added: TreesLayer | null = null
+    ;(async () => {
+      try {
+        const res = await fetch(TREES_URL)
+        if (!res.ok) return
+        const data = await res.json()
+        const { createTreesLayer } = await import('./treesLayer')
+        const layer = await createTreesLayer(data)
+        if (cancelled) return
+        layer.setVisible(!flatRef.current)
+        map.addLayer(layer, BUILDINGS_BEFORE_ID)
+        treesRef.current = layer
+        added = layer
+      } catch {
+        // 나무가 없어도 지도는 정상
+      }
+    })()
+    return () => {
+      cancelled = true
+      if (added && map.getLayer(added.id)) map.removeLayer(added.id)
+      treesRef.current = null
+    }
+  }, [loaded])
+  // 2D 보기에서는 나무를 숨긴다
+  useEffect(() => {
+    flatRef.current = flat
+    treesRef.current?.setVisible(!flat)
+  }, [flat])
 
   // 구간 범위는 구간이 바뀔 때만 계산한다
   const zone = useMemo(() => (focusPath ? focusZone(focusPath) : null), [focusPath])
@@ -251,10 +279,6 @@ export default function MapView({ flat = false, onFail, routes = null, pins = []
           <Layer {...shadowFarLayer} filter={farFilter} layout={{ visibility: flat ? 'none' : 'visible' }} beforeId={BUILDINGS_BEFORE_ID} />
           <Layer {...nearLayer} filter={nearFilter} beforeId={BUILDINGS_BEFORE_ID} />
           <Layer {...farLayer} filter={farFilter} beforeId={BUILDINGS_BEFORE_ID} />
-        </Source>
-        <Source id={TREES_SOURCE_ID} type="geojson" data={TREES_URL}>
-          <Layer {...trunkLayer} layout={{ visibility: flat ? 'none' : 'visible' }} beforeId={BUILDINGS_BEFORE_ID} />
-          <Layer {...crownLayer} layout={{ visibility: flat ? 'none' : 'visible' }} beforeId={BUILDINGS_BEFORE_ID} />
         </Source>
         {/* 구간 범위 밖을 흐리게 덮는 덮개. 범위 모양만 뚫려 있다 */}
         <Source id={VEIL_SOURCE_ID} type="geojson" data={veil}>

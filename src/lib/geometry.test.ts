@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 // 전처리 스크립트가 쓰는 함수들 (그림자·나무)
-import { convexHull, mulberry32, pointInPolygon, ringArea, scatterInPolygon, shadowRing } from '../../scripts/lib/geometry.mjs'
+import { convexHull, isClearOfRings, mulberry32, pointInPolygon, ringArea, scatterInPolygon, shadowRing } from '../../scripts/lib/geometry.mjs'
 
 type P = [number, number]
 const square = (x: number, y: number, s: number): P[] => [[x, y], [x + s, y], [x + s, y + s], [x, y + s], [x, y]]
@@ -56,5 +56,17 @@ describe('scatterInPolygon', () => {
     for (const p of scatterInPolygon(withHole, { rng: mulberry32(3), minSpacing: 12, areaPerTree: 400, occupied: new Map() })) {
       expect(pointInPolygon(p, withHole)).toBe(true)
     }
+  })
+})
+
+describe('isClearOfRings', () => {
+  const building = [square(0, 0, 10)]
+  it('건물 위나 수관이 건물에 닿으면 false', () => {
+    expect(isClearOfRings([5, 5], 3, building)).toBe(false)
+    expect(isClearOfRings([12, 5], 3, building)).toBe(false) // 중심은 밖이지만 수관이 건물에 걸침
+  })
+  it('충분히 떨어지면 true', () => {
+    expect(isClearOfRings([20, 5], 3, building)).toBe(true)
+    expect(isClearOfRings([5, 5], 3, [])).toBe(true)
   })
 })

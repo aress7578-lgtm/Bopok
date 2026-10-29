@@ -8,7 +8,7 @@ import mapshaper from 'mapshaper'
 import geojsonvt from 'geojson-vt'
 import vtpbf from 'vt-pbf'
 import { shadowRing } from './lib/geometry.mjs'
-import { SHADOW_BEARING_DEG, SHADOW_LENGTH_RATIO } from '../src/lib/map-config.ts'
+import { SHADOW_BEARING_DEG, SHADOW_LENGTH_RATIO, TREE_BBOX } from '../src/lib/map-config.ts'
 
 // ───────── 조절 값 ─────────
 // WGS84 [경도min, 위도min, 경도max, 위도max]. null 이면 대전 전체. 범위를 주면 중심점이 안에 있는 건물만 통째로 남긴다
@@ -220,6 +220,22 @@ const out = await mapshaper.applyCommands(
 )
 const parsed = JSON.parse(Buffer.from(out['out.json']).toString('utf8'))
 const n = parsed.features.length
+
+// 나무 스크립트가 건물 위에 나무를 놓지 않도록, 시연 권역(TREE_BBOX) 건물의 바깥 고리를 data/raw/derived 에 저장한다
+{
+  const [w, s, e, nn] = TREE_BBOX
+  const rings = []
+  for (const f of parsed.features) {
+    const parts = f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates
+    for (const part of parts) {
+      const ring = part[0]
+      if (ring.some(([x, y]) => x >= w && x <= e && y >= s && y <= nn)) rings.push(ring)
+    }
+  }
+  const dir = path.join(root, 'data/raw/derived')
+  fs.mkdirSync(dir, { recursive: true })
+  fs.writeFileSync(path.join(dir, 'buildings-footprints.json'), JSON.stringify(rings))
+}
 
 // 5) 벡터 타일. 타일에는 지도가 읽는 속성(fid, h, floors, d)만 싣는다. d=1 은 높이 정보가 없어 기본 높이로 정한 건물
 for (const f of parsed.features) f.properties = { fid: f.properties.fid, h: f.properties.h, floors: f.properties.floors, ...(f.properties.hSource === 'default' ? { d: 1 } : {}) }

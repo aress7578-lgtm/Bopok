@@ -100,9 +100,9 @@ export const BUILDINGS_SHADOW_NEAR_LAYER_ID = 'shadows-near'
 export const BUILDINGS_SHADOW_FAR_LAYER_ID = 'shadows-far'
 
 // ───────── 나무 (scripts/build-trees.mjs, 시연 권역만) ─────────
-// TODO(B안): maplibre 커스텀 레이어 + three.js InstancedMesh 로 같은 나무 점 위치에 구(수관)·원기둥(줄기)을 그려 동글동글하게. 지금은 fill-extrusion 원기둥(A안).
-export const TREES_URL = '/data/daejeon-trees.geojson'
-export const TREES_SOURCE_ID = 'trees'
+// maplibre 커스텀 레이어 + three.js InstancedMesh 로 나무 점마다 구(수관)와 원기둥(줄기)을 그린다(src/components/map/treesLayer.ts)
+export const TREES_URL = '/data/daejeon-trees.json'
+export const TREES_LAYER_ID = 'trees-3d'
 export const TREES_MIN_ZOOM = 15
 // [서, 남, 동, 북]
 export const TREE_BBOX: [number, number, number, number] = [127.370, 36.360, 127.400, 36.385]
@@ -110,5 +110,7 @@ export const TREE_MAX_COUNT = 3000
 export const TREE_MIN_SPACING_M = 12
 export const TREE_CROWN_RADIUS_M: [number, number] = [3, 4.5]
 export const TREE_TRUNK_RADIUS_M = 0.6
-export const TREE_TRUNK_HEIGHT_M = 3
+// 수관은 위아래로 살짝 눌린 구(1 = 완전한 구), 줄기는 수관 중심까지
+export const TREE_CROWN_SQUASH = 0.88
+export const TREE_LIGHT = { ambient: 1.0, directional: 0.28 } // 부드럽고 고른 빛(그림자 없음)
 export const TREE_CROWN_TOP_M: [number, number] = [8, 11]

@@ -94,3 +94,19 @@ export function scatterInPolygon(rings, { rng, minSpacing, areaPerTree, occupied
   }
   return out
 }
+
+// 나무가 건물 위에 놓이지 않게: 중심과 수관 둘레(radius) 위의 점들이 어떤 건물 바닥 안에도 없으면 true
+export function isClearOfRings([x, y], radius, rings) {
+  const probes = [[x, y]]
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2
+    probes.push([x + Math.cos(a) * radius, y + Math.sin(a) * radius])
+  }
+  for (const ring of rings) {
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity
+    for (const [px, py] of ring) { if (px < x0) x0 = px; if (px > x1) x1 = px; if (py < y0) y0 = py; if (py > y1) y1 = py }
+    if (x + radius < x0 || x - radius > x1 || y + radius < y0 || y - radius > y1) continue
+    for (const p of probes) if (pointInRing(p, ring)) return false
+  }
+  return true
+}
