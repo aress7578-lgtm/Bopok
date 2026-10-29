@@ -1,7 +1,8 @@
 'use client'
 
 import { usePlan } from '@/components/PlanProvider'
-import { conditionFromAnswers, type OptionKey } from '@/lib/judge'
+import { usePlanJudge } from '@/components/usePlanJudge'
+import { type OptionKey } from '@/lib/judge'
 import { buildFinalPlan } from '@/lib/final-plan'
 import { buildShareText } from '@/lib/share-text'
 
@@ -29,7 +30,8 @@ async function copyText(text: string) {
 
 export function FinalScreen() {
   const { state, go, notify } = usePlan()
-  const plan = buildFinalPlan(state.places, state.option as OptionKey, conditionFromAnswers(state.answers))
+  const { condition } = usePlanJudge()
+  const plan = buildFinalPlan(state.places, state.option as OptionKey, condition)
 
   const copy = async () => {
     notify((await copyText(buildShareText(plan))) ? '일정 글을 복사했어요' : '복사하지 못했어요')

@@ -8,6 +8,9 @@ export type Condition = {
   speed: Speed
 }
 
+// S5 "조건 바꿔 보기"에서 부모님이 고른 조건 위에 덮어쓰는 값
+export type TunedCondition = Partial<Pick<Condition, 'continuousMin' | 'dayMin' | 'avoidStairs'>>
+
 export type Segment = {
   id: string
   label: string

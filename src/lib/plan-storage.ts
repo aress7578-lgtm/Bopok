@@ -1,3 +1,4 @@
+import type { TunedCondition } from './judge'
 import { defaultPlaces, demoAnswers, exampleSchedule, type PlaceRow } from './plan-data'
 
 export type PlanState = {
@@ -8,6 +9,8 @@ export type PlanState = {
   option: number
   demo: boolean
   places: PlaceRow[]
+  // 조건 바꿔 보기로 바꾼 값(없으면 부모님이 고른 조건 그대로)
+  tuned: TunedCondition
 }
 
 export const PLAN_STORAGE_KEY = 'bobok-plan'
@@ -20,6 +23,7 @@ export const initialPlan: PlanState = {
   option: 0,
   demo: false,
   places: defaultPlaces,
+  tuned: {},
 }
 
 export const demoPlan: PlanState = {
@@ -30,6 +34,7 @@ export const demoPlan: PlanState = {
   option: 0,
   demo: true,
   places: defaultPlaces,
+  tuned: {},
 }
 
 // 랜딩에서 시작할 때 이전 상태가 복원되지 않도록 저장값을 직접 지정/삭제한다.

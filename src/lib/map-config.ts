@@ -24,3 +24,15 @@ export const BUILDINGS_LAYER_ID = 'buildings-3d'
 // 건물은 땅·공원·물 위, 도로·지명 아래. 숨겨 둔 원래 건물 레이어 다음에 오는 첫 도로 레이어 앞에 끼운다
 export const BUILDINGS_BEFORE_ID = 'tunnel_motorway_casing'
 export const BUILDINGS_FALLBACK_H = 6
+
+// 경로 선·핀
+export const ROUTE_SOURCE_ID = 'routes'
+// 건물 위, 지명(글자) 아래
+export const ROUTE_BEFORE_ID = 'waterway_line_label'
+export const ROUTE_COLORS = {
+  ok: '#1D4ED8',      // 조건 충족
+  warn: '#EA580C',    // 조정 필요
+  info: '#A8A196',    // 정보 부족
+  ride: '#8A847B',    // 탈것 구간
+  casing: '#FFFFFF',
+}
