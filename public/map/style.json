@@ -3015,8 +3015,8 @@
   "sky-color": "#F8F4F6",
   "horizon-color": "#F8F4F6",
   "fog-color": "#F8F4F6",
-  "fog-ground-blend": 0.5,
-  "horizon-fog-blend": 0.8,
-  "sky-horizon-blend": 0.9
+  "fog-ground-blend": 0.4,
+  "horizon-fog-blend": 0.9,
+  "sky-horizon-blend": 1
  }
 }

@@ -72,6 +72,18 @@ MapLibre 에는 건물 그림자 기능이 없어서 바닥에 그림자 모양�
 - 빛 세기는 `TREE_LIGHT` (three 는 람베르트 빛을 1/π 로 나눠서 쓰므로 코드에서 π 를 곱해 "색 × 세기" 로 맞춤)
 - 한계: 시연 권역 밖 공원에는 나무가 없습니다. 지도 범위를 넓히려면 `TREE_BBOX` 를 키우고 `TREE_MAX_COUNT` 도 함께 조정
 
+## 대전 경계와 밖 덮기 (`pnpm data:boundary`)
+
+건물 데이터가 대전에만 있어서, 카메라를 기울이면 지평선 쪽 세종 등 대전 밖이 비어 보입니다. 그래서 세계 전체에서 대전 경계를 뚫은 마스크를 바탕색으로 덮어 대전만 보이게 합니다.
+
+- `scripts/build-boundary.mjs` 가 OpenStreetMap(Overpass API)에서 대전광역시 행정경계(`admin_level=4`)를 **한 번** 받아 `data/raw/osm-daejeon-boundary.json` 에 저장하고, `public/data/daejeon-boundary.geojson`(경계, 약 441 꼭짓점)과 `public/data/daejeon-mask.geojson`(@turf/turf `mask`)을 만듭니다. 앱이 실행 중에는 이 파일들만 읽고 외부 경계 요청은 하지 않습니다.
+- 지도 레이어 순서: 바탕 지도·건물·그림자·나무 → 마스크(대전 밖, 바탕색 100%) → 경계선(연한 선 `#C9C2D6` 1.5px + 바깥 은은한 그림자 `#D9D3E3` 10px/blur 8/0.6). 판정 경로 선과 핀은 대전 안(마스크 구멍)에 있어서 가려지지 않습니다.
+- 스크립트가 `MAP_MAX_BOUNDS`(경계 bbox + 사방 2km)와 `MAP_MIN_ZOOM`(1440×900 화면에 대전 전체가 들어오는 줌 10.65)을 계산해서 알려 주고, 값은 `src/lib/map-config.ts` 에 넣어 두었습니다.
+- 기울기 제한: `maxPitch 60`, 줌 12 이하 35°, 줌 14 에서 50°, 줌 15.5 이상 60° (`MAP_PITCH_LIMITS`, `src/lib/map-limits.ts`). 줌이 바뀔 때마다 `setMaxPitch` 로 맞춥니다.
+- 지평선 안개: `style.json` 의 `sky`(하늘·지평선·안개 모두 바탕색, fog-ground-blend 0.4, horizon-fog-blend 0.9, sky-horizon-blend 1)
+
+**출처:** 행정경계 © OpenStreetMap contributors (ODbL, https://www.openstreetmap.org/copyright)
+
 ## 지도 색 (`pnpm map:style`)
 
 `public/map/style.json` 은 OpenFreeMap Positron 원본(`data/raw/map-style-positron.json`)에 `src/lib/map-config.ts` 의 `PALETTE`·`ROAD_WIDTHS`·`LIGHT`·`SKY` 를 입혀 `scripts/build-map-style.mjs` 가 만듭니다. 색을 바꾸려면 상수를 고치고 `pnpm map:style`.

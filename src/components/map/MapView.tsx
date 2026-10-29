@@ -7,6 +7,7 @@ import Map, { Layer, Marker, Source, type LayerProps, type MapRef } from 'react-
 import type { Feature, FeatureCollection, LineString, Polygon } from 'geojson'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import type { TreesLayer } from './treesLayer'
+import { maxPitchForZoom } from '@/lib/map-limits'
 import { crossingBearing, focusZone, nearBuildingIds, veilPolygon } from '@/lib/map-focus'
 import type { Coord } from '@/lib/map-types'
 import type { MapPin, RouteProps } from '@/lib/map-geojson'
@@ -16,7 +17,7 @@ import {
   BUILDINGS_BEFORE_ID, BUILDINGS_FALLBACK_H, BUILDINGS_FAR_LAYER_ID, BUILDINGS_NEAR_LAYER_ID, BUILDINGS_MAX_ZOOM, BUILDINGS_MIN_ZOOM, BUILDINGS_SOURCE_ID, BUILDINGS_SOURCE_LAYER, BUILDINGS_TILES,
   FAR_COLOR, FAR_HEIGHT_SCALE, FAR_OPACITY, FOCUS_MOVE_MS, FOCUS_PITCH, FOCUS_RISE_MS, VEIL_OPACITY, VEIL_SOURCE_ID,
   BUILDINGS_SHADOW_FAR_LAYER_ID, BUILDINGS_SHADOW_NEAR_LAYER_ID, BUILDINGS_SHADOW_SOURCE_LAYER, PALETTE, SHADOW_FAR_OPACITY, SHADOW_OPACITY,
-  TREES_URL,
+  TREES_URL, BOUNDARY_GLOW, BOUNDARY_LINE, BOUNDARY_SOURCE_ID, BOUNDARY_URL, MAP_MAX_PITCH, MASK_SOURCE_ID, MASK_URL,
   ROUTE_BEFORE_ID, ROUTE_COLORS, ROUTE_SOURCE_ID,
 } from '@/lib/map-config'
 
@@ -257,6 +258,9 @@ export default function MapView({ flat = false, onFail, routes = null, pins = []
         minZoom={MAP_MIN_ZOOM}
         maxZoom={MAP_MAX_ZOOM}
         maxBounds={MAP_MAX_BOUNDS}
+        maxPitch={MAP_MAX_PITCH}
+        // 줌아웃할수록 덜 기울게: 줌이 바뀔 때마다 최대 기울기를 줌에 맞춘다(지금 기울기가 넘으면 maplibre 가 그 한도로 맞춰 준다)
+        onZoom={e => e.target.setMaxPitch(maxPitchForZoom(e.viewState.zoom))}
         localIdeographFontFamily={MAP_FONT_FAMILY}
         attributionControl={{ compact: true }}
         canvasContextAttributes={CANVAS_ATTRIBUTES}
@@ -268,7 +272,7 @@ export default function MapView({ flat = false, onFail, routes = null, pins = []
           const id = e.features?.[0]?.properties?.segmentId
           if (typeof id === 'string') onSelectSegment?.(id)
         }}
-        onLoad={() => setLoaded(true)}
+        onLoad={e => { e.target.setMaxPitch(maxPitchForZoom(e.target.getZoom())); setLoaded(true) }}
         // 지도가 뜨기 전에 난 오류(스타일·WebGL)만 실패로 본다. 타일 하나가 늦는 건 무시
         onError={() => { if (!loaded) setFailed(true) }}
         style={{ width: '100%', height: '100%' }}
@@ -289,6 +293,14 @@ export default function MapView({ flat = false, onFail, routes = null, pins = []
             {routeLayers.map(layer => <Layer key={layer.id} {...layer} beforeId={ROUTE_BEFORE_ID} />)}
           </Source>
         )}
+        {/* 대전 밖 덮기: 세계 전체에서 대전 경계를 뚫은 도형을 바탕색으로 */}
+        <Source id={MASK_SOURCE_ID} type="geojson" data={MASK_URL}>
+          <Layer id="daejeon-mask" type="fill" paint={{ 'fill-color': PALETTE.background, 'fill-opacity': 1 }} />
+        </Source>
+        <Source id={BOUNDARY_SOURCE_ID} type="geojson" data={BOUNDARY_URL}>
+          <Layer id="daejeon-boundary-glow" type="line" layout={{ 'line-join': 'round' }} paint={{ 'line-color': BOUNDARY_GLOW.color, 'line-width': BOUNDARY_GLOW.width, 'line-blur': BOUNDARY_GLOW.blur, 'line-opacity': BOUNDARY_GLOW.opacity }} />
+          <Layer id="daejeon-boundary-line" type="line" layout={{ 'line-join': 'round' }} paint={{ 'line-color': BOUNDARY_LINE.color, 'line-width': BOUNDARY_LINE.width }} />
+        </Source>
         {pins.map(pin => (
           <Marker key={pin.id} longitude={pin.coord[0]} latitude={pin.coord[1]} anchor={pin.kind === 'stairs' ? 'bottom' : 'center'} style={{ zIndex: pin.kind === 'stairs' ? 3 : 2 }}>
             {pin.kind === 'stairs' ? (

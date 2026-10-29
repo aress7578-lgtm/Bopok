@@ -33,7 +33,7 @@ export const TEXT_SIZE_SCALE = 0.88
 export const TEXT_HALO_WIDTH = 1.5
 // 빛은 약하고 고르게, 하늘·안개는 바탕색으로 지평선이 흐려지게
 export const LIGHT = { anchor: 'map', color: '#FFFFFF', intensity: 0.15, position: [1.5, 210, 30] }
-export const SKY = { 'fog-ground-blend': 0.5, 'horizon-fog-blend': 0.8, 'sky-horizon-blend': 0.9 }
+export const SKY = { 'fog-ground-blend': 0.4, 'horizon-fog-blend': 0.9, 'sky-horizon-blend': 1 }
 
 export const MAP_STYLE_URL = '/map/style.json'
 // 번들러가 워커 경로를 깨뜨려서, scripts/copy-map-assets.mjs 가 복사한 파일을 직접 불러온다
@@ -41,13 +41,19 @@ export const MAP_WORKER_URL = '/map/maplibre-gl-worker.mjs'
 
 export const MAP_CENTER = { longitude: 127.385, latitude: 36.372 }
 export const MAP_ZOOM = 15.2
-export const MAP_PITCH = 62
+export const MAP_PITCH = 60
 export const MAP_BEARING = -20
 
-export const MAP_MIN_ZOOM = 13
+// 대전 전체(경계 bbox)가 1440×900 화면에 딱 들어오는 줌. scripts/build-boundary.mjs 가 계산한 값
+export const MAP_MIN_ZOOM = 10.65
 export const MAP_MAX_ZOOM = 18
-// 대전 전체(건물 범위 127.248~127.554, 36.193~36.498)보다 넉넉하게 [서, 남, 동, 북]
-export const MAP_MAX_BOUNDS: [number, number, number, number] = [127.22, 36.17, 127.58, 36.52]
+// 대전 경계 bbox 에서 사방 2km 여유 [서, 남, 동, 북]. scripts/build-boundary.mjs 가 계산한 값
+export const MAP_MAX_BOUNDS: [number, number, number, number] = [127.224014, 36.165281, 127.56317, 36.518299]
+
+// 기울기 제한: 줌아웃할수록 덜 기울게. [줌, 최대 pitch] 사이는 직선으로 잇는다(그 밖은 양 끝 값)
+// 줌 12 이하 35°, 줌 14 에서 50°, 줌 15.5 이상 60°. 그보다 더 기울면 지평선에 대전 밖이 보인다
+export const MAP_MAX_PITCH = 60
+export const MAP_PITCH_LIMITS: [number, number][] = [[12, 35], [14, 50], [15.5, 60]]
 
 export const MAP_FLAT_DURATION_MS = 800
 export const MAP_BG_COLOR = PALETTE.background
@@ -114,3 +120,12 @@ export const TREE_TRUNK_RADIUS_M = 0.6
 export const TREE_CROWN_SQUASH = 0.88
 export const TREE_LIGHT = { ambient: 1.0, directional: 0.28 } // 부드럽고 고른 빛(그림자 없음)
 export const TREE_CROWN_TOP_M: [number, number] = [8, 11]
+
+// ───────── 대전 밖 덮기 (scripts/build-boundary.mjs, © OpenStreetMap contributors) ─────────
+// 건물 데이터가 대전에만 있어서, 세계 전체에서 대전 경계를 뚫은 마스크를 바탕색으로 덮어 대전만 보이게 한다
+export const BOUNDARY_URL = '/data/daejeon-boundary.geojson'
+export const MASK_URL = '/data/daejeon-mask.geojson'
+export const MASK_SOURCE_ID = 'daejeon-mask'
+export const BOUNDARY_SOURCE_ID = 'daejeon-boundary'
+export const BOUNDARY_LINE = { color: '#C9C2D6', width: 1.5 }
+export const BOUNDARY_GLOW = { color: '#D9D3E3', width: 10, blur: 8, opacity: 0.6 }
