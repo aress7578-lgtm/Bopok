@@ -34,7 +34,8 @@ export async function createTreesLayer(data: TreesData): Promise<TreesLayer> {
   const camera = new THREE.Camera()
   const disposables: { dispose(): void }[] = []
 
-  // 위(z) 방향이 높이인 좌표계: x 동쪽, y 북쪽(메르카토르는 남쪽이 +y 라 아래에서 y 를 뒤집는다)
+  // 장면 좌표는 지도(메르카토르)와 같은 방향: x 동쪽, y 남쪽, z 위. 원점(origin)에서 몇 미터 떨어졌는지로 둔다.
+  // 큰 좌표(0.8 정도)를 GPU 의 float32 로 계산하면 오차가 수 m 라 건물 깊이와 어긋나므로, 원점 이동·축소는 CPU(배정밀도)에서 투영 행렬에 합친다.
   const crownGeometry = new THREE.SphereGeometry(1, 18, 14)
   const trunkGeometry = new THREE.CylinderGeometry(TREE_TRUNK_RADIUS_M * 0.8, TREE_TRUNK_RADIUS_M, 1, 8)
   trunkGeometry.rotateX(Math.PI / 2) // 원기둥 축을 위(z)로
@@ -50,10 +51,11 @@ export async function createTreesLayer(data: TreesData): Promise<TreesLayer> {
   const color = new THREE.Color()
   data.trees.forEach(([x, y, radius, top, hex], i) => {
     const center = crownCenterHeight(top, radius)
-    m.compose(new THREE.Vector3(x, y, center), new THREE.Quaternion(), new THREE.Vector3(radius, radius, radius * TREE_CROWN_SQUASH))
+    // 북쪽(+y)을 남쪽 방향(-y)으로: 구·원기둥은 좌우 대칭이라 모양이 뒤집혀 보일 일이 없다
+    m.compose(new THREE.Vector3(x, -y, center), new THREE.Quaternion(), new THREE.Vector3(radius, radius, radius * TREE_CROWN_SQUASH))
     crowns.setMatrixAt(i, m)
     crowns.setColorAt(i, color.set(hex))
-    m.compose(new THREE.Vector3(x, y, 0), new THREE.Quaternion(), new THREE.Vector3(1, 1, center))
+    m.compose(new THREE.Vector3(x, -y, 0), new THREE.Quaternion(), new THREE.Vector3(1, 1, center))
     trunks.setMatrixAt(i, m)
   })
   crowns.instanceMatrix.needsUpdate = true
@@ -63,17 +65,15 @@ export async function createTreesLayer(data: TreesData): Promise<TreesLayer> {
   crowns.frustumCulled = false
   trunks.frustumCulled = false
 
-  // 미터 → 메르카토르: 동쪽 +x, 북쪽은 -y, 위 +z
-  const world = new THREE.Group()
-  world.position.set(origin.x, origin.y, origin.z)
-  world.scale.set(unit, -unit, unit)
-  world.add(crowns, trunks)
-  scene.add(world)
+  scene.add(crowns, trunks)
+  // 미터 → 메르카토르(원점 이동 + 축소). 뒤집지 않으므로 면의 앞뒤가 그대로다
+  const toMercator = new THREE.Matrix4().makeTranslation(origin.x, origin.y, origin.z).scale(new THREE.Vector3(unit, unit, unit))
+  const main = new THREE.Matrix4()
   // 부드럽고 고른 빛: 주변광을 세게, 위쪽 왼쪽에서 약한 방향광
   // three 는 람베르트 빛을 1/π 로 나눠서 쓰므로 둘 다 π 를 곱해 "색 × 세기" 로 보이게 한다
   scene.add(new THREE.AmbientLight(0xffffff, TREE_LIGHT.ambient * Math.PI))
   const sun = new THREE.DirectionalLight(0xffffff, TREE_LIGHT.directional * Math.PI)
-  sun.position.set(-1, 1.2, 2.2)
+  sun.position.set(-1, 1.2, 2.2) // 서쪽·남쪽 위에서(y 는 남쪽이 +)
   scene.add(sun)
 
   const layer: TreesLayer = {
@@ -92,7 +92,8 @@ export async function createTreesLayer(data: TreesData): Promise<TreesLayer> {
     },
     render(_gl, args) {
       if (!renderer || !visible) return
-      camera.projectionMatrix.fromArray(args.defaultProjectionData.mainMatrix as unknown as number[])
+      main.fromArray(args.defaultProjectionData.mainMatrix as unknown as number[])
+      camera.projectionMatrix.copy(main).multiply(toMercator)
       renderer.resetState()
       renderer.render(scene, camera)
     },
