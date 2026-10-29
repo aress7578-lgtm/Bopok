@@ -4,26 +4,27 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
 import type { Map as MapLibreMap } from 'maplibre-gl'
 import {
-  ACTIONS_FADE_MS, ACTIONS_STAGGER_MS, BACK_FLY_MS, DRIFT_METERS, DRIFT_MS, EXPLORE_VIEW, FLY_DELAY_MS, FLY_MS,
-  GLYPH_BLUR_PX, GLYPH_DROP_PX, GLYPH_DURATION_MS, GLYPH_EASING, GLYPH_STAGGER_MS, GLYPH_STAGGER_SEEN_MS, GLYPH_TILT_DEG,
-  HINT_MS, INTRO_VIEW, LEAD_FADE_MS, MOBILE_MAX_WIDTH, PLACE_PINS, SEEN_KEY, TEXT_OUT_MS, TEXT_OUT_RISE_PX, TITLE_LINES, TITLE_TEXT,
-  TOUR_MS, TOUR_RESUME_MS, TOUR_WAYPOINTS, VEIL, glyphDelays, titleDoneAt,
+  ACTIONS, BACK_FLY_MS, DRIFT_METERS, DRIFT_MS, EXIT, EXPLORE_VIEW, FLY_MS, GLYPH, GLYPH_SEEN, HINT_MS, INTRO_VIEW, LEAD,
+  MAP_FILTER_MS, MOBILE_MAX_WIDTH, PLACE_PINS, QUIET_MAP_FILTER, SEEN_KEY, TITLE_LINES, TITLE_TEXT, TOUR_MS, TOUR_RESUME_MS,
+  TOUR_WAYPOINTS, VEIL, VEIL_FADE_MS, exitHalfMs, exitTotalMs, introTimeline,
 } from '@/lib/landing-intro'
 import { PALETTE } from '@/lib/map-config'
 import type { MapPin } from '@/lib/map-geojson'
-import { HeroClouds } from './HeroClouds'
 import { createCameraLoop, metersToLon, type CameraLoop } from './tour'
 import styles from './Hero.module.css'
 
-// 서버에는 WebGL이 없어서 지도는 브라우저에서만 불러온다. 지도가 뜨기 전에는 바탕색 + 구름만 보인다
+// 서버에는 WebGL이 없어서 지도는 브라우저에서만 불러온다. 지도가 뜨기 전에는 바탕색만 보인다
 const MapView = dynamic(() => import('@/components/map/MapView'), { ssr: false })
 
 const reduced = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
 const hexToRgb = (hex: string) => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16)).join(', ')
-const veilBackground = `radial-gradient(ellipse at center, rgba(${hexToRgb(PALETTE.background)}, ${VEIL.center}) 0%, rgba(${hexToRgb(PALETTE.background)}, ${VEIL.mid}) ${VEIL.midStop}%, rgba(${hexToRgb(PALETTE.background)}, 0) ${VEIL.end}%)`
+const veilBackground = `radial-gradient(${VEIL.shape}, rgba(${hexToRgb(PALETTE.background)}, ${VEIL.center}) 0%, rgba(${hexToRgb(PALETTE.background)}, ${VEIL.mid}) ${VEIL.midStop}%, rgba(${hexToRgb(PALETTE.background)}, 0) ${VEIL.end}%)`
 
 const placePins: MapPin[] = PLACE_PINS.map(p => ({ id: p.id, kind: 'place', coord: p.coord, label: p.name }))
+
+// 설명 문구는 줄 단위로 나타난다
+const LEAD_LINES = ['주차장에서 입구, 관람길 계단까지 계산해서', '부모님이 편하게 걸을 수 있는 일정으로 고쳐드려요.']
 
 type Phase = 'intro' | 'exploring'
 
@@ -33,6 +34,7 @@ export function Hero({ onStart }: { onStart: () => void }) {
   const [arrived, setArrived] = useState(false)   // 둘러보기로 내려앉아 도착함
   const [homeReady, setHomeReady] = useState(true) // 첫 화면 위치로 돌아와 있음(돌아가는 중이면 false)
   const [flat, setFlat] = useState(true)          // true = 건물 높이 0 (평면 지도)
+  const [colorOn, setColorOn] = useState(false)  // false = 색이 빠진 조용한 지도, true = 색이 돌아옴
   const [showHint, setShowHint] = useState(false)
   const [map, setMap] = useState<MapLibreMap | null>(null)
   const [mapFailed, setMapFailed] = useState(false)
@@ -67,7 +69,7 @@ export function Hero({ onStart }: { onStart: () => void }) {
     return () => mq.removeEventListener('change', sync)
   }, [])
 
-  // 히어로가 화면 밖이면 자동 이동과 구름 애니메이션을 멈춘다
+  // 히어로가 화면 밖이면 자동 이동과 글자 애니메이션을 멈춘다
   useEffect(() => {
     const el = heroRef.current
     if (!el) return
@@ -135,14 +137,15 @@ export function Hero({ onStart }: { onStart: () => void }) {
     }
   }, [map, tourWanted])
 
-  // 지도 둘러보기
+  // 지도 둘러보기: 글자가 위로 빠지다가 절반쯤 빠졌을 때 지도 색이 돌아오기 시작하고 카메라가 내려앉는다
   const explore = () => {
     if (!map || phaseRef.current === 'exploring') return
     setPhase('exploring')
+    const fast = reduced()
     later(() => {
       driftRef.current?.stop()
+      setColorOn(true)
       setFlat(false) // 건물 높이 0 → 1 (카메라가 기울기 시작할 때부터)
-      const fast = reduced()
       const mine = ++flight.current
       map.once('moveend', () => {
         if (mine !== flight.current) return // 도중에 '처음으로'를 눌렀으면 도착으로 치지 않는다
@@ -151,10 +154,10 @@ export function Hero({ onStart }: { onStart: () => void }) {
         later(() => setShowHint(false), HINT_MS)
       })
       map.flyTo({ center: EXPLORE_VIEW.center, zoom: EXPLORE_VIEW.zoom, pitch: EXPLORE_VIEW.pitch, bearing: EXPLORE_VIEW.bearing, duration: fast ? 0 : FLY_MS, essential: true })
-    }, FLY_DELAY_MS)
+    }, fast ? 0 : exitHalfMs(TITLE_LINES))
   }
 
-  // 처음으로: 카메라가 첫 화면 위치(평면)로 돌아가고 구름·제목이 다시 나타난다
+  // 처음으로: 카메라가 첫 화면 위치(평면)로 돌아가고 제목이 다시 내려앉는다
   const back = () => {
     if (!map) return
     tourRef.current?.stop()
@@ -162,6 +165,7 @@ export function Hero({ onStart }: { onStart: () => void }) {
     setArrived(false)
     setShowHint(false)
     setHomeReady(false)
+    setColorOn(false) // 카메라가 돌아가는 동안 지도는 다시 색이 빠진다
     setPhase('intro')
     setTitleKey(k => k + 1)
     setSeen(true) // 다시 보는 제목은 짧게
@@ -173,31 +177,39 @@ export function Hero({ onStart }: { onStart: () => void }) {
     map.flyTo({ center: INTRO_VIEW.center, zoom: INTRO_VIEW.zoom, pitch: INTRO_VIEW.pitch, bearing: INTRO_VIEW.bearing, duration: reduced() ? 0 : BACK_FLY_MS, essential: true })
   }
 
-  // 제목 글자별 지연
-  const stagger = seen ? GLYPH_STAGGER_SEEN_MS : GLYPH_STAGGER_MS
-  const delays = useMemo(() => glyphDelays(TITLE_LINES, stagger), [stagger])
-  const leadDelay = titleDoneAt(TITLE_LINES, stagger)
-  const actionsDelay = leadDelay + LEAD_FADE_MS
+  // 등장 타임라인(다시 들어온 경우는 더 짧고 빠르게)
+  const timing = seen ? GLYPH_SEEN : GLYPH
+  const tl = useMemo(() => introTimeline(TITLE_LINES, timing, LEAD_LINES.length), [timing])
+  // 퇴장 순서는 왼쪽 글자부터(둘째 줄은 첫 줄 뒤에 이어서)
+  const exitOrder = useMemo(() => {
+    let n = 0
+    return TITLE_LINES.map(line => [...line].map(ch => (ch === ' ' ? 0 : n++)))
+  }, [])
 
   const exploring = phase === 'exploring'
   const cssVars = {
-    '--out-ms': `${TEXT_OUT_MS}ms`,
-    '--out-rise': `${TEXT_OUT_RISE_PX}px`,
-    '--glyph-ms': `${GLYPH_DURATION_MS}ms`,
-    '--glyph-ease': GLYPH_EASING,
-    '--glyph-blur': `${GLYPH_BLUR_PX}px`,
-    '--glyph-drop': `${GLYPH_DROP_PX}px`,
-    '--glyph-tilt': `${GLYPH_TILT_DEG}deg`,
-    '--lead-ms': `${LEAD_FADE_MS}ms`,
-    '--lead-delay': `${leadDelay}ms`,
-    '--actions-ms': `${ACTIONS_FADE_MS}ms`,
-    '--actions-delay': `${actionsDelay}ms`,
-    '--actions-stagger': `${ACTIONS_STAGGER_MS}ms`,
+    '--quiet-filter': QUIET_MAP_FILTER,
+    '--filter-ms': `${MAP_FILTER_MS}ms`,
+    '--veil-ms': `${VEIL_FADE_MS}ms`,
+    '--g-ms': `${timing.durationMs}ms`,
+    '--g-ease': timing.easing,
+    '--g-rise': `${timing.riseEm}em`,
+    '--g-blur': `${timing.blurPx}px`,
+    '--lead-ms': `${LEAD.durationMs}ms`,
+    '--lead-rise': `${LEAD.riseEm}px`,
+    '--actions-ms': `${ACTIONS.durationMs}ms`,
+    '--actions-rise': `${ACTIONS.risePx}px`,
+    '--actions-stagger': `${ACTIONS.staggerMs}ms`,
+    '--ad': `${tl.actionsDelay}ms`,
+    '--x-ms': `${EXIT.durationMs}ms`,
+    '--x-rise': `${EXIT.riseEm}em`,
+    '--x-blur': `${EXIT.blurPx}px`,
+    '--exit-total': `${exitTotalMs(TITLE_LINES)}ms`,
     '--hint-ms': `${HINT_MS}ms`,
   } as React.CSSProperties
 
   return (
-    <section ref={heroRef} className={styles.hero} data-active={active} data-phase={phase} style={cssVars}>
+    <section ref={heroRef} className={styles.hero} data-active={active} data-phase={phase} data-color={colorOn} style={cssVars}>
       <div className={styles.map}>
         <MapView
           mode="landing"
@@ -210,7 +222,6 @@ export function Hero({ onStart }: { onStart: () => void }) {
           onFail={onMapFail}
         />
       </div>
-      <HeroClouds phase={phase} active={active} />
       <div className={styles.veil} data-hidden={exploring} style={{ background: veilBackground }} aria-hidden="true" />
 
       <div className={styles.copy} data-hidden={exploring} aria-hidden={exploring} inert={exploring}>
@@ -219,11 +230,13 @@ export function Hero({ onStart }: { onStart: () => void }) {
             <span key={li} className={styles.line} aria-hidden="true">
               {[...line].map((ch, i) => (ch === ' '
                 ? <span key={i} className={styles.space} />
-                : <span key={i} className={styles.glyph} style={{ '--d': `${delays[li][i]}ms` } as React.CSSProperties}>{ch}</span>))}
+                : <span key={i} className={styles.glyph} style={{ '--d': `${tl.delays[li][i]}ms`, '--o': `${exitOrder[li][i] * EXIT.staggerMs}ms` } as React.CSSProperties}>{ch}</span>))}
             </span>
           ))}
         </h1>
-        <p key={`lead-${titleKey}`} className={styles.lead}>주차장에서 입구, 관람길 계단까지 계산해서<br className="desktop" /> 부모님이 편하게 걸을 수 있는 일정으로 고쳐드려요.</p>
+        <p key={`lead-${titleKey}`} className={styles.lead}>
+          {LEAD_LINES.map((line, i) => <span key={i} className={styles.leadLine} style={{ '--ld': `${tl.leadDelays[i]}ms` } as React.CSSProperties}>{line}</span>)}
+        </p>
         <div key={`actions-${titleKey}`} className={styles.actions}>
           <button className="button hero-start" onClick={onStart}>지금 시작하기</button>
           {map && !mapFailed && <button className={styles.explore} onClick={explore}>지도 둘러보기</button>}

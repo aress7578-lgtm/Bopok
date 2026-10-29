@@ -1,4 +1,4 @@
-/* S1 시작 화면(히어로). 시간 값은 src/lib/landing-intro.ts 에서 인라인 CSS 변수로 내려온다 */
+/* S1 시작 화면(히어로). 시간·거리 값은 src/lib/landing-intro.ts 에서 인라인 CSS 변수로 내려온다 */
 .hero {
   position: relative;
   height: max(640px, calc(100svh - 72px));
@@ -9,19 +9,26 @@
   background: #f8f4f6;
 }
 
+/* 지도: 첫 화면에선 색이 빠진 조용한 지도, 둘러보기를 시작하면 필터가 풀리며 색이 돌아온다 */
 .map {
   position: absolute;
   inset: 0;
   z-index: 0;
+  filter: var(--quiet-filter);
+  transition: filter var(--filter-ms) ease;
 }
 
-/* 가운데 글자 뒤 은은한 타원 덮개 (색·진하기는 Hero.tsx 에서 인라인으로) */
+.hero[data-color='true'] .map {
+  filter: none;
+}
+
+/* 가운데 글자 뒤 아주 옅은 타원 덮개 (색·모양은 Hero.tsx 에서 인라인으로) */
 .veil {
   position: absolute;
   inset: 0;
   z-index: 2;
   pointer-events: none;
-  transition: opacity var(--out-ms) ease;
+  transition: opacity var(--veil-ms) ease;
 }
 
 .veil[data-hidden='true'] {
@@ -32,14 +39,13 @@
   position: relative;
   z-index: 5;
   padding: 0 20px;
-  transition: opacity var(--out-ms) ease, transform var(--out-ms) ease, visibility 0s linear var(--out-ms);
 }
 
+/* 글자가 다 빠진 뒤에 숨긴다(visibility 는 빠지는 동안 기다렸다가 바뀐다). 돌아올 때는 바로 보인다 */
 .copy[data-hidden='true'] {
-  opacity: 0;
-  transform: translateY(var(--out-rise));
   visibility: hidden;
   pointer-events: none;
+  transition: visibility 0s linear var(--exit-total);
 }
 
 .title {
@@ -57,7 +63,7 @@
 
 .glyph {
   display: inline-block;
-  animation: glyph-in var(--glyph-ms) var(--glyph-ease) var(--d) both;
+  animation: glyph-in var(--g-ms) var(--g-ease) var(--d) both;
   will-change: transform, opacity, filter;
 }
 
@@ -66,11 +72,10 @@
   width: 0.28em;
 }
 
-/* 위에서 흐릿하게 내려오며 또렷해지고, 마지막에 살짝 흔들리며 자리 잡는다 */
+/* 위에서 흐릿하게 내려앉으며 또렷해진다. 회전·색 변화는 없다 */
 @keyframes glyph-in {
-  0% { opacity: 0; filter: blur(var(--glyph-blur)); transform: translateY(var(--glyph-drop)) rotate(0deg); }
-  75% { opacity: 1; filter: blur(0); transform: translateY(0) rotate(var(--glyph-tilt)); }
-  100% { opacity: 1; filter: blur(0); transform: translateY(0) rotate(0deg); }
+  from { opacity: 0; transform: translateY(var(--g-rise)); filter: blur(var(--g-blur)); }
+  to { opacity: 1; transform: none; filter: blur(0); }
 }
 
 .lead {
@@ -78,7 +83,16 @@
   line-height: 1.75;
   font-size: 17px;
   margin: 24px 0 28px;
-  animation: fade-in var(--lead-ms) ease var(--lead-delay) both;
+}
+
+.leadLine {
+  display: block;
+  animation: lead-in var(--lead-ms) ease var(--ld) both;
+}
+
+@keyframes lead-in {
+  from { opacity: 0; transform: translateY(var(--lead-rise)); }
+  to { opacity: 1; transform: none; }
 }
 
 .actions {
@@ -89,20 +103,36 @@
 }
 
 .actions > * {
-  animation: fade-up var(--actions-ms) ease both;
+  animation: actions-in var(--actions-ms) ease var(--ad) both;
 }
 
-.actions > :nth-child(1) { animation-delay: var(--actions-delay); }
-.actions > :nth-child(2) { animation-delay: calc(var(--actions-delay) + var(--actions-stagger)); }
-
-@keyframes fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
+.actions > :nth-child(2) {
+  animation-delay: calc(var(--ad) + var(--actions-stagger));
 }
 
-@keyframes fade-up {
-  from { opacity: 0; transform: translateY(14px); }
+@keyframes actions-in {
+  from { opacity: 0; transform: translateY(var(--actions-rise)); }
   to { opacity: 1; transform: none; }
+}
+
+/* 퇴장: 글자는 왼쪽부터 위로 흩어지듯 빠지고, 설명·버튼도 함께 위로 빠진다 */
+.copy[data-hidden='true'] .glyph {
+  animation: glyph-out var(--x-ms) ease var(--o) forwards;
+}
+
+.copy[data-hidden='true'] .leadLine,
+.copy[data-hidden='true'] .actions > * {
+  animation: out-up var(--x-ms) ease forwards;
+}
+
+@keyframes glyph-out {
+  from { opacity: 1; transform: none; filter: blur(0); }
+  to { opacity: 0; transform: translateY(var(--x-rise)); filter: blur(var(--x-blur)); }
+}
+
+@keyframes out-up {
+  from { opacity: 1; transform: none; }
+  to { opacity: 0; transform: translateY(-14px); }
 }
 
 /* 알약 모양 테두리 버튼 */
@@ -118,12 +148,11 @@
   font-weight: 700;
   cursor: pointer;
   backdrop-filter: blur(4px);
-  transition: background 0.18s, transform 0.18s;
+  transition: background 0.18s;
 }
 
 .explore:hover {
   background: rgba(255, 255, 255, 0.9);
-  transform: translateY(-1px);
 }
 
 /* 둘러보기 단계의 화면 위 컨트롤 */
@@ -136,6 +165,11 @@
   font-weight: 700;
   cursor: pointer;
   animation: fade-in 0.5s ease both;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 .back {
@@ -187,8 +221,10 @@
   100% { opacity: 0; }
 }
 
-/* 히어로가 화면 밖이면 움직임을 멈춘다 */
-.hero[data-active='false'] .glyph {
+/* 히어로가 화면 밖이면 글자 애니메이션을 멈춘다 */
+.hero[data-active='false'] .glyph,
+.hero[data-active='false'] .leadLine,
+.hero[data-active='false'] .actions > * {
   animation-play-state: paused;
 }
 
@@ -206,21 +242,25 @@
   }
 }
 
-/* 움직임 줄이기: 글자는 한 번에 나타난다 */
+/* 움직임 줄이기: 애니메이션 없이 바로 보였다가 바로 사라진다 */
 @media (prefers-reduced-motion: reduce) {
   .glyph,
-  .lead,
+  .leadLine,
   .actions > *,
   .back,
-  .startPill {
+  .startPill,
+  .hint,
+  .copy[data-hidden='true'] .glyph,
+  .copy[data-hidden='true'] .leadLine,
+  .copy[data-hidden='true'] .actions > * {
     animation: none;
   }
 
-  .hint {
-    animation: none;
+  .copy[data-hidden='true'] {
+    transition: none;
   }
 
-  .copy,
+  .map,
   .veil {
     transition: none;
   }

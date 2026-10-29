@@ -1,31 +1,28 @@
 // S1 시작 화면 연출 값. 시간은 모두 ms, 거리는 m, 각도는 도
 
-// ───────── 글자 애니메이션 ─────────
+// ───────── 글자 등장 (위에서 부드럽게 내려앉기) ─────────
 export const TITLE_LINES = ['부모님 보폭에 맞춘', '하루 여행']
 export const TITLE_TEXT = TITLE_LINES.join(' ')
-export const GLYPH_DURATION_MS = 1100        // 글자 하나가 내려오는 시간
-export const GLYPH_STAGGER_MS = 70           // 글자마다 늦게 시작하는 간격
-export const GLYPH_STAGGER_SEEN_MS = 25      // 다시 들어온 경우(sessionStorage)
-export const GLYPH_DROP_PX = -48
-export const GLYPH_BLUR_PX = 8
-export const GLYPH_EASING = 'cubic-bezier(0.2, 0.7, 0.2, 1)'
-export const GLYPH_TILT_DEG = -3             // 내려온 뒤 살짝 흔들리며 자리 잡는 각도
-export const LINE2_OVERLAP_MS = 500          // 첫 줄이 끝나기 이 시간 전에 둘째 줄이 이어서 시작
-export const LEAD_FADE_MS = 600
-export const ACTIONS_FADE_MS = 600
-export const ACTIONS_STAGGER_MS = 150
+export const GLYPH = { durationMs: 1200, staggerMs: 45, riseEm: -0.55, blurPx: 6, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' }
+export const GLYPH_SEEN = { ...GLYPH, durationMs: 700, staggerMs: 20 } // 다시 들어온 경우(sessionStorage)
+export const LINE2_AT = 0.7                  // 둘째 줄은 첫 줄이 이만큼(70%) 진행됐을 때 이어서
+export const LEAD = { durationMs: 900, riseEm: -10, lineGapMs: 120, startAt: 0.7 } // 설명: 줄 단위, 제목이 70% 진행됐을 때 시작. riseEm 은 px
+export const ACTIONS = { durationMs: 500, risePx: 6, staggerMs: 100 }
 export const SEEN_KEY = 'bobok-landing-seen'
 
+// ───────── 글자 퇴장 ("지도 둘러보기") ─────────
+export const EXIT = { durationMs: 500, staggerMs: 20, riseEm: -0.4, blurPx: 4 } // 왼쪽 글자부터. 설명·버튼도 함께 위로
+export const MAP_FILTER_MS = 1800            // 지도 색이 돌아오는 시간(필터 해제)
+export const VEIL_FADE_MS = 800              // 제목 뒤 덮개가 사라지는 시간
+
 // ───────── 둘러보기 전환 ─────────
-export const TEXT_OUT_MS = 500               // 제목·설명·버튼이 위로 사라짐
-export const TEXT_OUT_RISE_PX = -24
-export const CLOUD_CLEAR_MS = 2500           // 두꺼운 구름이 흩어짐
-export const FLY_DELAY_MS = 300              // 구름·글자가 움직이기 시작하고 나서 카메라가 내려앉기 시작
 export const FLY_MS = 4000
 export const RISE_MS = 1800                  // 건물 높이 배율 0 → 1 (카메라가 기울기 시작할 때부터)
 export const HINT_MS = 2500                  // "끌어서 둘러보세요" 안내
 export const BACK_FLY_MS = 2500              // "처음으로" 복귀 카메라 이동
 export const PIN_FADE_MS = 600
+// 첫 화면 지도: 색이 빠진 조용한 지도 (둘러보기로 넘어가면 필터가 풀린다)
+export const QUIET_MAP_FILTER = 'grayscale(1) brightness(1.04)'
 
 // ───────── 카메라 ─────────
 export type LandingView = { center: [number, number]; zoom: number; pitch: number; bearing: number }
@@ -56,24 +53,45 @@ export const PLACE_PINS: { id: string; name: string; coord: [number, number] }[]
 // ───────── 화면 ─────────
 export const HERO_MIN_HEIGHT_PX = 640
 export const MOBILE_MAX_WIDTH = 768          // 이보다 좁으면 휴대폰: 협력 제스처, 나무·그림자 끔
-export const VEIL = { center: 0.85, mid: 0.55, midStop: 35, end: 70 } // 제목 뒤 타원 덮개(바탕색 진하기, % 위치)
+// 제목 뒤 가운데 옅은 타원 덮개(바탕색 진하기, % 위치)
+export const VEIL = { shape: 'ellipse 60% 45% at center', center: 0.7, mid: 0.35, midStop: 50, end: 80 }
 
-// ───────── 글자별 시작 지연 계산 ─────────
-// 띄어쓰기는 지연 칸을 쓰지 않는다. 둘째 줄은 첫 줄이 끝나기 LINE2_OVERLAP_MS 전에 이어서 시작한다.
-export function glyphDelays(lines: string[], stagger: number): number[][] {
+// ───────── 등장 타임라인 계산 ─────────
+export type GlyphTiming = typeof GLYPH
+const glyphCount = (line: string) => [...line].filter(c => c !== ' ').length
+
+// 글자별 시작 지연. 띄어쓰기는 지연 칸을 쓰지 않는다. 둘째 줄은 첫 줄이 LINE2_AT 만큼 진행됐을 때 이어서 시작한다.
+export function glyphDelays(lines: string[], t: GlyphTiming): number[][] {
   let lineStart = 0
   return lines.map(line => {
-    const glyphs = [...line].filter(c => c !== ' ')
     let n = 0
-    const delays = [...line].map(c => (c === ' ' ? 0 : lineStart + n++ * stagger))
-    const lineEnd = lineStart + Math.max(glyphs.length - 1, 0) * stagger + GLYPH_DURATION_MS
-    lineStart = Math.max(lineEnd - LINE2_OVERLAP_MS, lineStart)
+    const delays = [...line].map(c => (c === ' ' ? 0 : lineStart + n++ * t.staggerMs))
+    const lineTotal = Math.max(glyphCount(line) - 1, 0) * t.staggerMs + t.durationMs
+    lineStart += lineTotal * LINE2_AT
     return delays
   })
 }
 
-// 글자가 모두 내려온 시각(설명이 나타나기 시작하는 때)
-export function titleDoneAt(lines: string[], stagger: number): number {
-  const d = glyphDelays(lines, stagger)
-  return Math.max(...d.flat()) + GLYPH_DURATION_MS
+export type IntroTimeline = {
+  delays: number[][]
+  titleEnd: number        // 글자가 모두 내려앉은 시각
+  leadDelays: number[]    // 설명 줄별 시작
+  leadEnd: number
+  actionsDelay: number    // 버튼 시작
 }
+
+export function introTimeline(lines: string[], t: GlyphTiming, leadLines = 2): IntroTimeline {
+  const delays = glyphDelays(lines, t)
+  const titleEnd = Math.max(...delays.flat()) + t.durationMs
+  const leadStart = titleEnd * LEAD.startAt
+  const leadDelays = Array.from({ length: leadLines }, (_, i) => leadStart + i * LEAD.lineGapMs)
+  const leadEnd = leadDelays[leadDelays.length - 1] + LEAD.durationMs
+  return { delays, titleEnd, leadDelays, leadEnd, actionsDelay: leadEnd }
+}
+
+// 퇴장: 글자 수(띄어쓰기 제외) 기준으로 모든 글자가 빠지는 데 걸리는 시간, 그리고 그 절반(이때 지도 필터 해제·카메라 이동 시작)
+export function exitTotalMs(lines: string[]): number {
+  const n = lines.reduce((s, l) => s + glyphCount(l), 0)
+  return EXIT.durationMs + Math.max(n - 1, 0) * EXIT.staggerMs
+}
+export const exitHalfMs = (lines: string[]) => Math.round(exitTotalMs(lines) / 2)
