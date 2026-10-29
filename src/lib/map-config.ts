@@ -16,3 +16,11 @@ export const MAP_MAX_BOUNDS: [number, number, number, number] = [127.33, 36.33, 
 export const MAP_FLAT_DURATION_MS = 800
 export const MAP_BG_COLOR = '#F3F1EC'
 export const MAP_FONT_FAMILY = "'Pretendard', 'Noto Sans KR', sans-serif"
+
+// 3D 건물 (scripts/build-buildings.mjs 가 만든 파일)
+export const BUILDINGS_URL = '/data/daejeon-buildings.geojson'
+export const BUILDINGS_SOURCE_ID = 'buildings'
+export const BUILDINGS_LAYER_ID = 'buildings-3d'
+// 건물은 땅·공원·물 위, 도로·지명 아래. 숨겨 둔 원래 건물 레이어 다음에 오는 첫 도로 레이어 앞에 끼운다
+export const BUILDINGS_BEFORE_ID = 'tunnel_motorway_casing'
+export const BUILDINGS_FALLBACK_H = 6

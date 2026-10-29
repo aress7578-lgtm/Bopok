@@ -3089,5 +3089,15 @@
     "text-halo-width": 1
    }
   }
- ]
+ ],
+ "light": {
+  "anchor": "viewport",
+  "position": [
+   1.15,
+   210,
+   30
+  ],
+  "intensity": 0.35,
+  "color": "#ffffff"
+ }
 }
