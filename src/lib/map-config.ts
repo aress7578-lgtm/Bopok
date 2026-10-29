@@ -20,7 +20,8 @@ export const MAP_FONT_FAMILY = "'Pretendard', 'Noto Sans KR', sans-serif"
 // 3D 건물 (scripts/build-buildings.mjs 가 만든 파일)
 export const BUILDINGS_URL = '/data/daejeon-buildings.geojson'
 export const BUILDINGS_SOURCE_ID = 'buildings'
-export const BUILDINGS_LAYER_ID = 'buildings-3d'
+export const BUILDINGS_NEAR_LAYER_ID = 'buildings-near'
+export const BUILDINGS_FAR_LAYER_ID = 'buildings-far'
 // 건물은 땅·공원·물 위, 도로·지명 아래. 숨겨 둔 원래 건물 레이어 다음에 오는 첫 도로 레이어 앞에 끼운다
 export const BUILDINGS_BEFORE_ID = 'tunnel_motorway_casing'
 export const BUILDINGS_FALLBACK_H = 6
@@ -36,3 +37,14 @@ export const ROUTE_COLORS = {
   ride: '#8A847B',    // 탈것 구간
   casing: '#FFFFFF',
 }
+
+// 구간만 보기
+export const FOCUS_PITCH = 60
+export const FOCUS_MOVE_MS = 900
+export const FOCUS_RISE_MS = 500
+// 범위 밖 건물: 높이 배율 / 색 / 진하기
+export const FAR_HEIGHT_SCALE = 0.35
+export const FAR_COLOR = '#EEEBE6'
+export const FAR_OPACITY = 0.3
+export const VEIL_OPACITY = 0.45
+export const VEIL_SOURCE_ID = 'focus-veil'

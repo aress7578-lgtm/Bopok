@@ -40,9 +40,11 @@ function statusOf(r: SegmentResult): RouteStatus {
 export function buildRouteGeoJSON(
   result: JudgeResult,
   stopIndex: number,
-  opts: { selectedId?: string | null; option?: OptionKey | number; geo?: Geo } = {},
+  opts: { selectedId?: string | null; option?: OptionKey | number; geo?: Geo; dimOthers?: boolean } = {},
 ): FeatureCollection<LineString, RouteProps> {
-  const { selectedId = null, option = 0, geo = DEMO_GEO } = opts
+  const { selectedId = null, option = 0, geo = DEMO_GEO, dimOthers = false } = opts
+  // 구간만 보기: 선택 구간 말고는 흐리게
+  const dim = (segmentId: string) => (dimOthers && segmentId !== selectedId ? 0.3 : 1)
   const features: Feature<LineString, RouteProps>[] = []
   for (const r of result.stops[stopIndex]?.segments ?? []) {
     const segment = r.segment
@@ -53,7 +55,7 @@ export function buildRouteGeoJSON(
         geometry: { type: 'LineString', coordinates: main.path },
         properties: {
           id: segment.id, segmentId: segment.id, role: main.ride ? 'ride' : 'main', status: statusOf(r),
-          selected: segment.id === selectedId, emphasis: 1,
+          selected: segment.id === selectedId, emphasis: dim(segment.id),
         },
       })
     }
@@ -64,7 +66,7 @@ export function buildRouteGeoJSON(
         geometry: { type: 'LineString', coordinates: ramp.path },
         properties: {
           id: segment.ramp.id, segmentId: segment.id, role: 'detour', status: 'ok',
-          selected: segment.id === selectedId, emphasis: option >= 1 ? 1 : 0.5,
+          selected: segment.id === selectedId, emphasis: (option >= 1 ? 1 : 0.5) * dim(segment.id),
         },
       })
     }

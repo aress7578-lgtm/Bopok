@@ -35,6 +35,14 @@ describe('buildRouteGeoJSON', () => {
     expect(selected).toEqual(['hb3', 'hb3r']) // 본 구간과 그 우회로
   })
 
+  it('구간만 보기에서는 선택하지 않은 구간 선이 흐려진다', () => {
+    const fc = buildRouteGeoJSON(judge(stops, base), 0, { selectedId: 'hb3', dimOthers: true })
+    const emphasis = (id: string) => fc.features.find(f => f.properties.id === id)?.properties.emphasis
+    expect(emphasis('hb3')).toBe(1)
+    expect(emphasis('hb1')).toBe(0.3)
+    expect(emphasis('hb3r')).toBe(0.5) // 선택 구간의 우회로는 원래 흐림
+  })
+
   it('출처가 없는 구간은 정보 부족(info)', () => {
     const noSource = [{ name: 'x', known: true, segments: [{ ...placeSegments['한밭수목원'][0], source: undefined }] }]
     expect(statusOf(buildRouteGeoJSON(judge(noSource, base), 0), 'hb1')).toBe('info')
