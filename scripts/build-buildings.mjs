@@ -1,4 +1,4 @@
-// 대전 GIS건물통합정보(SHP) → 3D 건물용 벡터 타일(public/tiles/buildings/{z}/{x}/{y}.pbf)
+// 대전 GIS건물통합정보(SHP) → 3D 건물·그림자용 벡터 타일(public/tiles/buildings/{z}/{x}/{y}.pbf, 레이어 buildings·shadows)
 // 실행: pnpm data:buildings   (원본은 data/raw/daejeon-buildings/ 에 둔다)
 import fs from 'node:fs'
 import path from 'node:path'
@@ -7,6 +7,8 @@ import { fileURLToPath } from 'node:url'
 import mapshaper from 'mapshaper'
 import geojsonvt from 'geojson-vt'
 import vtpbf from 'vt-pbf'
+import { shadowRing } from './lib/geometry.mjs'
+import { SHADOW_BEARING_DEG, SHADOW_LENGTH_RATIO } from '../src/lib/map-config.ts'
 
 // ───────── 조절 값 ─────────
 // WGS84 [경도min, 위도min, 경도max, 위도max]. null 이면 대전 전체. 범위를 주면 중심점이 안에 있는 건물만 통째로 남긴다
@@ -198,6 +200,20 @@ function pointInRing([x, y], ring) {
   }
   return inside
 }
+// 4-2) 그림자: 건물 바닥을 해 반대편(북동쪽)으로 h × 비율 만큼 옮긴 것과 합쳐 볼록 껍질로 감싼다. 미터 단위인 원본 좌표계에서 계산한다
+const shadowGeo = {
+  type: 'FeatureCollection',
+  features: feats.map(f => {
+    const outers = f.rings.filter(r => ringArea(r) < 0)
+    const ring = shadowRing(outers.length ? outers : f.rings, f.props.h, SHADOW_BEARING_DEG, SHADOW_LENGTH_RATIO)
+    return { type: 'Feature', properties: { fid: f.props.fid }, geometry: { type: 'Polygon', coordinates: [ring] } }
+  }),
+}
+const shadowOut = await mapshaper.applyCommands(
+  `-i in.json -proj wgs84 from="${PROJ5186}" -o out.json format=geojson rfc7946 precision=0.000001`,
+  { 'in.json': JSON.stringify(shadowGeo) },
+)
+const shadows = JSON.parse(Buffer.from(shadowOut['out.json']).toString('utf8'))
 const out = await mapshaper.applyCommands(
   `-i in.json -proj wgs84 from="${PROJ5186}" -o out.json format=geojson rfc7946 precision=0.000001`,
   { 'in.json': JSON.stringify(geo) },
@@ -205,17 +221,26 @@ const out = await mapshaper.applyCommands(
 const parsed = JSON.parse(Buffer.from(out['out.json']).toString('utf8'))
 const n = parsed.features.length
 
-// 5) 벡터 타일. 타일에는 지도가 읽는 속성(fid, h, floors)만 싣는다
-for (const f of parsed.features) f.properties = { fid: f.properties.fid, h: f.properties.h, floors: f.properties.floors }
-const index = new geojsonvt(parsed, { minZoom: 0, maxZoom: TILE_MAX_ZOOM, indexMaxZoom: TILE_MAX_ZOOM, indexMaxPoints: 0, extent: TILE_EXTENT, buffer: 64, tolerance: 3 })
+// 5) 벡터 타일. 타일에는 지도가 읽는 속성(fid, h, floors, d)만 싣는다. d=1 은 높이 정보가 없어 기본 높이로 정한 건물
+for (const f of parsed.features) f.properties = { fid: f.properties.fid, h: f.properties.h, floors: f.properties.floors, ...(f.properties.hSource === 'default' ? { d: 1 } : {}) }
+const tileOptions = { minZoom: 0, maxZoom: TILE_MAX_ZOOM, indexMaxZoom: TILE_MAX_ZOOM, indexMaxPoints: 0, extent: TILE_EXTENT, buffer: 64, tolerance: 3 }
+const index = new geojsonvt(parsed, tileOptions)
+const shadowIndex = new geojsonvt(shadows, tileOptions)
 fs.rmSync(OUT_DIR, { recursive: true, force: true })
 const hash = crypto.createHash('sha256')
 let tileCount = 0, tileBytes = 0
-const coords = index.tileCoords.filter(c => c.z >= TILE_MIN_ZOOM).sort((a, b) => a.z - b.z || a.x - b.x || a.y - b.y)
+const coordKey = c => `${c.z}/${c.x}/${c.y}`
+const allCoords = new Map()
+for (const c of [...index.tileCoords, ...shadowIndex.tileCoords]) allCoords.set(coordKey(c), c)
+const coords = [...allCoords.values()].filter(c => c.z >= TILE_MIN_ZOOM).sort((a, b) => a.z - b.z || a.x - b.x || a.y - b.y)
 for (const { z, x, y } of coords) {
+  const layers = {}
   const tile = index.getTile(z, x, y)
-  if (!tile || tile.features.length === 0) continue
-  const buf = Buffer.from(vtpbf.fromGeojsonVt({ buildings: tile }, { version: 2, extent: TILE_EXTENT }))
+  if (tile && tile.features.length > 0) layers.buildings = tile
+  const shadowTile = shadowIndex.getTile(z, x, y)
+  if (shadowTile && shadowTile.features.length > 0) layers.shadows = shadowTile
+  if (Object.keys(layers).length === 0) continue
+  const buf = Buffer.from(vtpbf.fromGeojsonVt(layers, { version: 2, extent: TILE_EXTENT }))
   const file = path.join(OUT_DIR, String(z), String(x), `${y}.pbf`)
   fs.mkdirSync(path.dirname(file), { recursive: true })
   fs.writeFileSync(file, buf)

@@ -8,8 +8,10 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "data:buildings": "node --max-old-space-size=8192 scripts/build-buildings.mjs",
-    "map:assets": "node scripts/copy-map-assets.mjs"
+    "data:buildings": "node --max-old-space-size=8192 scripts/build-buildings.mjs && node scripts/build-trees.mjs",
+    "map:assets": "node scripts/copy-map-assets.mjs",
+    "map:style": "node scripts/build-map-style.mjs",
+    "data:trees": "node scripts/build-trees.mjs"
   },
   "dependencies": {
     "@turf/turf": "^7.4.0",
@@ -30,6 +32,7 @@
     "eslint-config-next": "16.4.3",
     "geojson-vt": "^5.0.4",
     "mapshaper": "^0.7.101",
+    "osmtogeojson": "3.0.0-beta.5",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^5.0.5",

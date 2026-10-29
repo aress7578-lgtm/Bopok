@@ -30,8 +30,9 @@
 | `fid` | 1부터 시작하는 짧은 숫자. 원본 id(`srcId`) 정렬 순서로 고정 |
 | `h` | **지도가 읽는 최종 높이(m)**. 아래 규칙으로 계산 |
 | `floors` | 지상층수 (A26). 없으면 null |
+| `d` | 1 이면 높이 정보가 없어 기본 높이(6m)로 정한 건물(`hSource` 가 `default`). 색을 가장 희게 칠하는 데 씀 |
 
-처리 중에는 `srcId`(원본 28자리 id), `height`(원본 높이), `hSource`(`h`를 정한 방법)도 계산하지만, 타일 용량을 줄이려고 타일에는 싣지 않습니다. 용도(`use`)는 빈 값이 많아 뺐습니다.
+처리 중에는 `srcId`(원본 28자리 id), `height`(원본 높이), `hSource`(`h`를 정한 방법)도 계산하지만, 타일 용량을 줄이려고 타일에는 싣지 않습니다(`hSource` 는 `d` 로만). 용도(`use`)는 빈 값이 많아 뺐습니다.
 
 ## 높이 `h` 계산
 
@@ -51,10 +52,32 @@
 
 `floors` 가 있는 건물은 74.0% (118,991/160,765) 입니다.
 
+## 그림자 (타일의 `shadows` 레이어)
+
+MapLibre 에는 건물 그림자 기능이 없어서 바닥에 그림자 모양을 깔아 흉내 냅니다. 건물마다 바닥 도형을 해 반대편(북동쪽, 방위 40도)으로 `h × 0.8` m 옮긴 것과 합쳐 볼록 껍질로 감싼 도형 하나입니다.
+
+- 미터 단위인 원본 좌표계에서 계산한 뒤 WGS84 로 변환합니다. 방향·길이 비율은 `src/lib/map-config.ts` 의 `SHADOW_BEARING_DEG`, `SHADOW_LENGTH_RATIO`
+- 대전 전체라 GeoJSON 한 파일(`daejeon-shadows.geojson`)이 아니라 건물과 같은 타일에 `shadows` 레이어로 함께 담습니다. 속성은 `fid`(건물과 같은 값)
+- 지도에서는 색 `#CFC6DC`, 진하기 0.35(구간만 보기에서 범위 밖 건물의 그림자는 0.12)
+
+## 나무 (`public/data/daejeon-trees.geojson`, 시연 권역만)
+
+`scripts/build-trees.mjs` (`pnpm data:trees`, `pnpm data:buildings` 가 이어서 실행)
+
+- 공원·숲·잔디 면은 OpenStreetMap(Overpass API)에서 시연 권역(`TREE_BBOX`)만 한 번 받아 `data/raw/osm-green-demo.json` 에 저장해서 씁니다(면 136개)
+- 면적 400㎡당 한 그루 정도로, 나무 사이 최소 12m, 권역 전체 최대 3,000그루(넘으면 난수로 골고루 덜어냄, 시드 고정이라 결과가 같음)
+- 나무마다 줄기(반지름 0.6m, 높이 0~3m, `#B9A99A`)와 수관(반지름 3~4.5m, base 3m, 꼭대기 8~11m, `#B5C7A0`~`#A3BA8E` 사이 랜덤) 원 도형 두 개
+- 한계: 건물 바닥 안에 나무가 놓일 수 있습니다(공원 안 건물 제외는 아직 안 함)
+- **TODO(B안)**: maplibre 커스텀 레이어 + three.js InstancedMesh 로 같은 위치에 구(수관)·원기둥(줄기)을 그려 동글동글하게
+
+## 지도 색 (`pnpm map:style`)
+
+`public/map/style.json` 은 OpenFreeMap Positron 원본(`data/raw/map-style-positron.json`)에 `src/lib/map-config.ts` 의 `PALETTE`·`ROAD_WIDTHS`·`LIGHT`·`SKY` 를 입혀 `scripts/build-map-style.mjs` 가 만듭니다. 색을 바꾸려면 상수를 고치고 `pnpm map:style`.
+
 ## 결과 요약
 
 - 원본 175,270동 → 15㎡ 미만 14,505동 제외 → **160,765동**
-- 타일 2,422개, 합계 약 20MB (가장 큰 타일 400KB 미만)
+- 타일 2,426개, 합계 약 38MB (건물 + 그림자, 가장 큰 타일 약 700KB). 배포에서는 압축돼서 전송된다
 - 건물 좌표 범위 `[127.248024, 36.192855, 127.553745, 36.498175]`
 
 ## 다시 만드는 방법
@@ -62,4 +85,4 @@
 1. 원본(`AL_D010_30_20261009.shp/.shx/.dbf/.prj`)을 `data/raw/daejeon-buildings/` 에 넣습니다. (`data/raw/` 는 `.gitignore`·`.vercelignore` 로 레포와 배포에서 빠집니다)
 2. `pnpm data:buildings` (약 15초)
 
-같은 원본이면 항상 같은 결과가 나옵니다(스크립트가 마지막에 타일 전체의 sha256 을 출력).
+같은 원본이면 항상 같은 결과가 나옵니다(스크립트가 마지막에 타일 전체와 나무 파일의 sha256 을 출력).

@@ -1,11 +1,47 @@
-// 3D 지도 설정 값 (시연 권역: 엑스포과학공원·한밭수목원 일대)
+// 3D 지도 설정 값 (기본 카메라: 엑스포과학공원·한밭수목원 일대)
+
+// ───────── 팔레트 (파스텔 지도) ─────────
+// 핑크빛이 도는 아주 연한 바탕 + 흰 건물 + 가는 회보라 도로 + 연보라 그림자 + 세이지 공원.
+// 이전 값은 각 줄 끝에 적어 두었다. style.json 은 scripts/build-map-style.mjs 가 이 값으로 다시 만든다.
+export const PALETTE = {
+  background: '#F8F4F6',     // 이전 #F3F1EC
+  park: '#C8D5B9',           // 이전 #D6EBC8
+  forest: '#BCCDAA',         // 이전 #D6EBC8
+  water: '#D6E4F0',          // 이전 #BFDDF0
+  roadMajor: '#B7BBC9',      // 이전 #FFFFFF (+테두리 #E4E0D8)
+  roadMinor: '#CDCFDA',      // 이전 #FFFFFF
+  roadPath: '#DADCE5',       // 이전 #FFFFFF
+  text: '#8E8A99',           // 이전 #8A847B
+  textHalo: '#FFFFFF',
+  buildingLow: '#FBF9FC',    // 이전 #F4EFE8 (낮은 건물)
+  buildingHigh: '#F3F0F7',   // 이전 #D9E4F2 (높은 건물)
+  buildingDefault: '#FDFCFD', // 높이 정보가 없어 기본 6m 로 정한 건물
+  buildingFar: '#F1EEF3',    // 구간만 보기에서 범위 밖 건물. 이전 #EEEBE6
+  shadow: '#CFC6DC',         // 새로 추가
+  trunk: '#B9A99A',          // 새로 추가
+  crowns: ['#B5C7A0', '#A3BA8E'] as [string, string], // 새로 추가(둘 사이 랜덤)
+  sky: '#F8F4F6',           // 하늘·안개도 바탕색
+}
+// 도로 폭(px) [줌, 폭] 끝점. 줌이 커질수록 굵어진다
+export const ROAD_WIDTHS = {
+  major: [[10, 1.5], [18, 4]] as [number, number][],
+  minor: [[13, 0.8], [18, 2.5]] as [number, number][],
+  path: [[14, 0.5], [18, 1.2]] as [number, number][],
+}
+// 글자: 크기를 한 단계 작게(원래 크기에 곱한다), 테두리 폭
+export const TEXT_SIZE_SCALE = 0.88
+export const TEXT_HALO_WIDTH = 1.5
+// 빛은 약하고 고르게, 하늘·안개는 바탕색으로 지평선이 흐려지게
+export const LIGHT = { anchor: 'map', color: '#FFFFFF', intensity: 0.15, position: [1.5, 210, 30] }
+export const SKY = { 'fog-ground-blend': 0.5, 'horizon-fog-blend': 0.8, 'sky-horizon-blend': 0.9 }
+
 export const MAP_STYLE_URL = '/map/style.json'
 // 번들러가 워커 경로를 깨뜨려서, scripts/copy-map-assets.mjs 가 복사한 파일을 직접 불러온다
 export const MAP_WORKER_URL = '/map/maplibre-gl-worker.mjs'
 
 export const MAP_CENTER = { longitude: 127.385, latitude: 36.372 }
-export const MAP_ZOOM = 15.5
-export const MAP_PITCH = 55
+export const MAP_ZOOM = 15.2
+export const MAP_PITCH = 62
 export const MAP_BEARING = -20
 
 export const MAP_MIN_ZOOM = 13
@@ -14,7 +50,7 @@ export const MAP_MAX_ZOOM = 18
 export const MAP_MAX_BOUNDS: [number, number, number, number] = [127.22, 36.17, 127.58, 36.52]
 
 export const MAP_FLAT_DURATION_MS = 800
-export const MAP_BG_COLOR = '#F3F1EC'
+export const MAP_BG_COLOR = PALETTE.background
 export const MAP_FONT_FAMILY = "'Pretendard', 'Noto Sans KR', sans-serif"
 
 // 3D 건물 (scripts/build-buildings.mjs 가 만든 파일)
@@ -48,7 +84,31 @@ export const FOCUS_MOVE_MS = 900
 export const FOCUS_RISE_MS = 500
 // 범위 밖 건물: 높이 배율 / 색 / 진하기
 export const FAR_HEIGHT_SCALE = 0.35
-export const FAR_COLOR = '#EEEBE6'
+export const FAR_COLOR = PALETTE.buildingFar
 export const FAR_OPACITY = 0.3
 export const VEIL_OPACITY = 0.45
 export const VEIL_SOURCE_ID = 'focus-veil'
+
+// ───────── 그림자 (scripts/build-buildings.mjs 가 건물 타일에 'shadows' 레이어로 함께 담는다) ─────────
+// 해가 반대편이라 그림자는 이 방위(북동쪽 40도)로 건물 높이 × 비율 만큼 늘어진다
+export const SHADOW_BEARING_DEG = 40
+export const SHADOW_LENGTH_RATIO = 0.8
+export const SHADOW_OPACITY = 0.35
+export const SHADOW_FAR_OPACITY = 0.12
+export const BUILDINGS_SHADOW_SOURCE_LAYER = 'shadows'
+export const BUILDINGS_SHADOW_NEAR_LAYER_ID = 'shadows-near'
+export const BUILDINGS_SHADOW_FAR_LAYER_ID = 'shadows-far'
+
+// ───────── 나무 (scripts/build-trees.mjs, 시연 권역만) ─────────
+// TODO(B안): maplibre 커스텀 레이어 + three.js InstancedMesh 로 같은 나무 점 위치에 구(수관)·원기둥(줄기)을 그려 동글동글하게. 지금은 fill-extrusion 원기둥(A안).
+export const TREES_URL = '/data/daejeon-trees.geojson'
+export const TREES_SOURCE_ID = 'trees'
+export const TREES_MIN_ZOOM = 15
+// [서, 남, 동, 북]
+export const TREE_BBOX: [number, number, number, number] = [127.370, 36.360, 127.400, 36.385]
+export const TREE_MAX_COUNT = 3000
+export const TREE_MIN_SPACING_M = 12
+export const TREE_CROWN_RADIUS_M: [number, number] = [3, 4.5]
+export const TREE_TRUNK_RADIUS_M = 0.6
+export const TREE_TRUNK_HEIGHT_M = 3
+export const TREE_CROWN_TOP_M: [number, number] = [8, 11]

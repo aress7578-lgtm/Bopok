@@ -14,6 +14,8 @@ import {
   MAP_MAX_BOUNDS, MAP_MAX_ZOOM, MAP_MIN_ZOOM, MAP_PITCH, MAP_STYLE_URL, MAP_WORKER_URL, MAP_ZOOM,
   BUILDINGS_BEFORE_ID, BUILDINGS_FALLBACK_H, BUILDINGS_FAR_LAYER_ID, BUILDINGS_NEAR_LAYER_ID, BUILDINGS_MAX_ZOOM, BUILDINGS_MIN_ZOOM, BUILDINGS_SOURCE_ID, BUILDINGS_SOURCE_LAYER, BUILDINGS_TILES,
   FAR_COLOR, FAR_HEIGHT_SCALE, FAR_OPACITY, FOCUS_MOVE_MS, FOCUS_PITCH, FOCUS_RISE_MS, VEIL_OPACITY, VEIL_SOURCE_ID,
+  BUILDINGS_SHADOW_FAR_LAYER_ID, BUILDINGS_SHADOW_NEAR_LAYER_ID, BUILDINGS_SHADOW_SOURCE_LAYER, PALETTE, SHADOW_FAR_OPACITY, SHADOW_OPACITY,
+  TREES_MIN_ZOOM, TREES_SOURCE_ID, TREES_URL, TREE_TRUNK_HEIGHT_M,
   ROUTE_BEFORE_ID, ROUTE_COLORS, ROUTE_SOURCE_ID,
 } from '@/lib/map-config'
 
@@ -34,11 +36,12 @@ const nearLayer: FillExtrusionLayerSpecification = {
     'fill-extrusion-height': heightScaled(1),
     'fill-extrusion-base': 0,
     'fill-extrusion-color': [
-      'interpolate', ['linear'], ['coalesce', ['get', 'floors'], ['/', HEIGHT, 3.5]],
-      1, '#F4EFE8', 15, '#ECE8E3', 30, '#D9E4F2',
+      'case', ['==', ['get', 'd'], 1], PALETTE.buildingDefault,
+      ['interpolate', ['linear'], HEIGHT, 4, PALETTE.buildingLow, 60, PALETTE.buildingHigh],
     ],
-    'fill-extrusion-vertical-gradient': true,
-    'fill-extrusion-opacity': 0.97,
+    // 아래쪽이 어두워지는 효과는 끈다(파스텔 질감)
+    'fill-extrusion-vertical-gradient': false,
+    'fill-extrusion-opacity': 1,
   },
 }
 const farLayer: FillExtrusionLayerSpecification = {
@@ -51,11 +54,31 @@ const farLayer: FillExtrusionLayerSpecification = {
     'fill-extrusion-height': heightScaled(FAR_HEIGHT_SCALE),
     'fill-extrusion-base': 0,
     'fill-extrusion-color': FAR_COLOR,
-    'fill-extrusion-vertical-gradient': true,
+    'fill-extrusion-vertical-gradient': false,
     'fill-extrusion-opacity': FAR_OPACITY,
   },
 }
-const veilLayer: FillLayerSpecification = { id: 'focus-veil', type: 'fill', source: VEIL_SOURCE_ID, paint: { 'fill-color': '#FFFFFF', 'fill-opacity': VEIL_OPACITY } }
+// 그림자: 건물 바닥 옆으로 늘어진 연보라 도형. 범위 밖(far) 건물의 그림자는 같이 흐려진다
+const shadowNearLayer: FillLayerSpecification = {
+  id: BUILDINGS_SHADOW_NEAR_LAYER_ID, type: 'fill', source: BUILDINGS_SOURCE_ID, 'source-layer': BUILDINGS_SHADOW_SOURCE_LAYER, minzoom: BUILDINGS_MIN_ZOOM,
+  paint: { 'fill-color': PALETTE.shadow, 'fill-opacity': SHADOW_OPACITY, 'fill-antialias': true },
+}
+const shadowFarLayer: FillLayerSpecification = {
+  id: BUILDINGS_SHADOW_FAR_LAYER_ID, type: 'fill', source: BUILDINGS_SOURCE_ID, 'source-layer': BUILDINGS_SHADOW_SOURCE_LAYER, minzoom: BUILDINGS_MIN_ZOOM,
+  paint: { 'fill-color': PALETTE.shadow, 'fill-opacity': SHADOW_FAR_OPACITY, 'fill-antialias': true },
+}
+// 나무(A안): 줄기와 수관을 fill-extrusion 원기둥으로. B안(three.js 구 모양)은 map-config.ts 의 TODO 참고
+const trunkLayer: FillExtrusionLayerSpecification = {
+  id: 'trees-trunk', type: 'fill-extrusion', source: TREES_SOURCE_ID, minzoom: TREES_MIN_ZOOM, filter: ['==', ['get', 'kind'], 'trunk'],
+  paint: { 'fill-extrusion-height': TREE_TRUNK_HEIGHT_M, 'fill-extrusion-base': 0, 'fill-extrusion-color': PALETTE.trunk, 'fill-extrusion-vertical-gradient': false, 'fill-extrusion-opacity': 1 },
+}
+const crownLayer: FillExtrusionLayerSpecification = {
+  id: 'trees-crown', type: 'fill-extrusion', source: TREES_SOURCE_ID, minzoom: TREES_MIN_ZOOM, filter: ['==', ['get', 'kind'], 'crown'],
+  paint: { 'fill-extrusion-height': ['get', 'h'], 'fill-extrusion-base': TREE_TRUNK_HEIGHT_M, 'fill-extrusion-color': ['get', 'c'], 'fill-extrusion-vertical-gradient': false, 'fill-extrusion-opacity': 1 },
+}
+const veilLayer: FillLayerSpecification = { id: 'focus-veil', type: 'fill', source: VEIL_SOURCE_ID, paint: { 'fill-color': PALETTE.background, 'fill-opacity': VEIL_OPACITY } }
+// 건물 가장자리를 부드럽게(maplibre 기본값은 antialias: false)
+const CANVAS_ATTRIBUTES = { antialias: true }
 const EMPTY_FC: FeatureCollection = { type: 'FeatureCollection', features: [] }
 
 // 경로 선 레이어. line-dasharray 는 데이터로 바꿀 수 없어서 점선/실선을 레이어로 나눈다.
@@ -208,6 +231,7 @@ export default function MapView({ flat = false, onFail, routes = null, pins = []
         maxBounds={MAP_MAX_BOUNDS}
         localIdeographFontFamily={MAP_FONT_FAMILY}
         attributionControl={{ compact: true }}
+        canvasContextAttributes={CANVAS_ATTRIBUTES}
         interactiveLayerIds={routes ? ['route-hit'] : []}
         cursor={cursor}
         onMouseEnter={() => setCursor('pointer')}
@@ -222,10 +246,17 @@ export default function MapView({ flat = false, onFail, routes = null, pins = []
         style={{ width: '100%', height: '100%' }}
       >
         <Source id={BUILDINGS_SOURCE_ID} type="vector" tiles={[BUILDINGS_TILES]} minzoom={BUILDINGS_MIN_ZOOM} maxzoom={BUILDINGS_MAX_ZOOM}>
+          {/* 그림자는 건물 레이어보다 아래. 2D 에서는 건물이 평면이라 그림자도 숨긴다 */}
+          <Layer {...shadowNearLayer} filter={nearFilter} layout={{ visibility: flat ? 'none' : 'visible' }} beforeId={BUILDINGS_BEFORE_ID} />
+          <Layer {...shadowFarLayer} filter={farFilter} layout={{ visibility: flat ? 'none' : 'visible' }} beforeId={BUILDINGS_BEFORE_ID} />
           <Layer {...nearLayer} filter={nearFilter} beforeId={BUILDINGS_BEFORE_ID} />
           <Layer {...farLayer} filter={farFilter} beforeId={BUILDINGS_BEFORE_ID} />
         </Source>
-        {/* 구간 범위 밖을 흐리게 덮는 흰 덮개. 범위 모양만 뚫려 있다 */}
+        <Source id={TREES_SOURCE_ID} type="geojson" data={TREES_URL}>
+          <Layer {...trunkLayer} layout={{ visibility: flat ? 'none' : 'visible' }} beforeId={BUILDINGS_BEFORE_ID} />
+          <Layer {...crownLayer} layout={{ visibility: flat ? 'none' : 'visible' }} beforeId={BUILDINGS_BEFORE_ID} />
+        </Source>
+        {/* 구간 범위 밖을 흐리게 덮는 덮개. 범위 모양만 뚫려 있다 */}
         <Source id={VEIL_SOURCE_ID} type="geojson" data={veil}>
           <Layer {...veilLayer} beforeId={ROUTE_BEFORE_ID} />
         </Source>
