@@ -57,11 +57,11 @@ export const TOUR_WAYPOINTS: LandingView[] = [
   { center: [127.3758, 36.3753], zoom: 16.4, pitch: 64, bearing: -35 },
 ]
 
-// 시연 장소 핀(한밭수목원, 국립중앙과학관, 대전시립미술관). 좌표는 demo-geo.ts 의 입구·전시관 값
+// 시연 장소 핀(한밭수목원, 국립중앙과학관, 대전시립미술관). 과학관·시립미술관 핀은 랜드마크 모형 위치(landmarks.ts)에 맞춘다
 export const PLACE_PINS: { id: string; name: string; coord: [number, number] }[] = [
   { id: 'place-hanbat', name: '한밭수목원', coord: [127.3856, 36.3684] },
-  { id: 'place-science', name: '국립중앙과학관', coord: [127.3770, 36.3774] },
-  { id: 'place-art', name: '대전시립미술관', coord: [127.3872, 36.3753] },
+  { id: 'place-science', name: '국립중앙과학관', coord: [127.3753, 36.3751] },
+  { id: 'place-art', name: '대전시립미술관', coord: [127.3857, 36.3668] },
 ]
 
 // 둘러보기로 내려앉을 때 필요한 줌 16 건물 타일을 소개가 끝난 뒤 미리 받아 둔다(내려앉는 중 네트워크 기다림을 없앤다)
