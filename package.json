@@ -13,7 +13,8 @@
     "map:style": "node scripts/build-map-style.mjs",
     "data:trees": "node scripts/build-trees.mjs",
     "data:boundary": "node scripts/build-boundary.mjs",
-    "data:landmarks": "node scripts/build-landmarks.mjs"
+    "data:landmarks": "node scripts/build-landmarks.mjs",
+    "data:landmark-images": "node scripts/build-landmark-images.mjs"
   },
   "dependencies": {
     "@turf/turf": "^7.4.0",
@@ -40,6 +41,7 @@
     "geojson-vt": "^5.0.4",
     "mapshaper": "^0.7.101",
     "osmtogeojson": "3.0.0-beta.5",
+    "sharp": "^0.35.5",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^5.0.5",

@@ -299,3 +299,19 @@
   font-weight: 700;
   z-index: 50;
 }
+
+/* 랜드마크 상세 화면이 열려 있는 동안 지도 위 버튼·안내를 숨긴다 */
+.hero[data-detail='true'] .back,
+.hero[data-detail='true'] .startPill,
+.hero[data-detail='true'] .hint {
+  animation: none;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.hero[data-detail='true'] .copy,
+.hero[data-detail='true'] .veil {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 300ms ease;
+}

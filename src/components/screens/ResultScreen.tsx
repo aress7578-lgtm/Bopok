@@ -8,6 +8,10 @@ import { formatSourceLine } from '@/lib/format-source'
 import { formatRange, unknownLabel, type Condition, type TunedCondition } from '@/lib/judge'
 import { segmentGeo } from '@/lib/demo-geo'
 import { buildPins, buildRouteGeoJSON, routeBounds } from '@/lib/map-geojson'
+import type { Map as MapLibreMap } from 'maplibre-gl'
+import { LandmarkDetail } from '@/components/landmark/LandmarkDetail'
+import { useLandmarkDetail } from '@/components/landmark/useLandmarkDetail'
+import { initialPlan, scheduleForPlace } from '@/lib/plan-storage'
 
 // 서버에는 WebGL이 없어서 지도는 브라우저에서만 불러온다
 const MapView = dynamic(() => import('@/components/map/MapView'), {
@@ -23,6 +27,10 @@ export function ResultScreen() {
   const [flat, setFlat] = useState(false)
   const [focusOnly, setFocusOnly] = useState(false)
   const [mapFailed, setMapFailed] = useState(false)
+  const [map, setMap] = useState<MapLibreMap | null>(null)
+  // 랜드마크 모형을 누르면 카메라가 다가가고 상세 화면이 올라온다
+  const detail = useLandmarkDetail({ map })
+  const detailActive = detail.state.phase !== 'closed'
   const onMapFail = useCallback(() => setMapFailed(true), [])
   const [selected, setSelected] = useState<string | null>(null)
   const segments = result.stops[result.focus]?.segments ?? []
@@ -58,18 +66,21 @@ export function ResultScreen() {
       : <span className="verdict info">? 정보 부족</span>
   const unknownName = result.unknown[0]
   const unknownTitle = unknownName?.startsWith('점심') ? `${unknownLabel(unknownName)}는` : `${unknownName}은(는)`
-  return <div className="planner-content result-page">
+  return <div className="planner-content result-page" data-detail={detailActive}>
     <div className="title-row"><div><p className="question-count">4 / 6 · 판정 결과</p><h1>{result.reason}</h1></div>{verdictBadge}</div>
     {result.unknown.length > 0 && <p className="missing-note">정보 없는 장소 {result.unknown.length}곳</p>}
     <div className="day-summary"><div><small>하루 총 걷는 시간</small><b>{formatRange(result.day)} <em>추정치</em></b>{dayOver ? <span className="over">조건 {condition.dayMin}분 · ! 넘어요</span> : <span>조건 {condition.dayMin}분 · ✓</span>}</div><div><small>가장 긴 연속 걷기</small><b>{formatRange(result.longest)} <em>추정치</em></b>{longestOver ? <span className="over">조건 {condition.continuousMin}분 · ! 넘어요</span> : <span>조건 {condition.continuousMin}분 · ✓</span>}</div></div>
     <details className="condition-tuner"><summary>조건 바꿔 보기</summary><p>쉬지 않고 걷기 <b className="tuner-ctrl"><button aria-label="쉬지 않고 걷기 줄이기" onClick={() => stepTuned('continuousMin', -5, 5, 60)}>−</button>{condition.continuousMin}분<button aria-label="쉬지 않고 걷기 늘리기" onClick={() => stepTuned('continuousMin', 5, 5, 60)}>＋</button></b></p><p>하루 총 걷기 <b className="tuner-ctrl"><button aria-label="하루 총 걷기 줄이기" onClick={() => stepTuned('dayMin', -10, 10, 240)}>−</button>{condition.dayMin}분<button aria-label="하루 총 걷기 늘리기" onClick={() => stepTuned('dayMin', 10, 10, 240)}>＋</button></b></p><p>계단 피하기 <button className="tuner-toggle" aria-pressed={condition.avoidStairs} onClick={() => setTuned('avoidStairs', !condition.avoidStairs)}>{condition.avoidStairs ? '켜짐' : '꺼짐'}</button></p>{differs && <p className="tuner-diff"><span>부모님이 고른 조건과 달라요</span><button onClick={() => update({ tuned: {} })}>원래 조건으로 되돌리기</button></p>}</details>
     <div className="result-grid">
-      <div className="route-map map-live"><MapView flat={flat} onFail={onMapFail} routes={routes} pins={pins} fit={fit} focusPath={focusPath} onSelectSegment={select} />{!mapFailed && <span className="map-label"><button className="map-focus" aria-pressed={focusOnly} onClick={() => setFocusOnly(v => !v)}>{focusOnly ? '전체 보기' : '구간만 보기'}</button>　 <button className="map-flat" onClick={() => setFlat(v => !v)}>{flat ? '3D로 보기' : '2D로 보기'}</button></span>}</div>
+      <div className="route-map map-live"><MapView flat={flat} onFail={onMapFail} routes={routes} pins={pins} fit={fit} focusPath={focusPath} onSelectSegment={select} onMapReady={setMap} onSelectLandmark={detail.open} focusLandmarkId={detail.landmark?.id ?? null} />{!mapFailed && <span className="map-label"><button className="map-focus" aria-pressed={focusOnly} onClick={() => setFocusOnly(v => !v)}>{focusOnly ? '전체 보기' : '구간만 보기'}</button>　 <button className="map-flat" onClick={() => setFlat(v => !v)}>{flat ? '3D로 보기' : '2D로 보기'}</button></span>}</div>
       <div className="segment-list"><h3>구간별 근거</h3>{segments.map(s => <div key={s.segment.id} className={s.segment.id === selId ? 'selected-segment' : undefined}><span><button className="seg-toggle" aria-expanded={!!open[s.segment.id]} onClick={() => { setSelected(s.segment.id); setOpen(prev => ({ ...prev, [s.segment.id]: !prev[s.segment.id] })) }}><b>{s.segment.label}</b><small>{formatRange(s.time)}{s.segment.stairs ? ` · 계단 ${s.segment.stairs}칸` : ''}{s.segment.note ? ` · ${s.segment.note}` : ''}</small></button>{open[s.segment.id] && <small className="seg-source">{formatSourceLine(s.segment.source, s.segment.checkedAt)}</small>}</span>{s.status === 'ok' ? <em className="status-ok">✓ 조건 충족</em> : <em className="status-warn">! 조정 필요</em>}</div>)}</div>
     </div>
     {unknownName && <div className="missing-card"><b>{unknownTitle} 아직 길 정보가 없어요</b><button onClick={() => go('/review')}>다녀오시면 알려주세요</button></div>}
     <div className="planner-actions"><button className="back" onClick={() => go('/plan/confirm')}>이전</button>{result.verdict === 'adjust'
       ? <button className="button" onClick={() => go('/plan/options')}>수정안 보기</button>
       : <button className="button" onClick={() => { update({ option: 0 }); go('/plan/final') }}>이대로 확정하기</button>}</div>
+  {detail.landmark && detail.state.phase !== 'flying' && (
+      <LandmarkDetail landmark={detail.landmark} phase={detail.state.phase} onClose={detail.close} onStartPlan={landmark => { update({ ...initialPlan, schedule: scheduleForPlace(landmark.name) }); go('/plan/schedule') }} />
+    )}
   </div>
 }

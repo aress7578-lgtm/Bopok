@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
+import { useRouter } from 'next/navigation'
 import type { Map as MapLibreMap } from 'maplibre-gl'
 import {
   ACTIONS, BACK_FLY_MS, DRIFT_METERS, DRIFT_MS, EXIT, EXPLORE_VIEW, FLY_MS, GLYPH, GLYPH_SEEN, HINT_MS, INTRO_VIEW, LEAD,
@@ -11,6 +12,9 @@ import {
 import { BUILDINGS_TILES, PALETTE } from '@/lib/map-config'
 import type { MapPin } from '@/lib/map-geojson'
 import { LANDMARKS, type Landmark } from '@/lib/landmarks'
+import { LandmarkDetail } from '@/components/landmark/LandmarkDetail'
+import { useLandmarkDetail } from '@/components/landmark/useLandmarkDetail'
+import { startWithPlace } from '@/lib/plan-storage'
 import { createCameraLoop, metersToLon, type CameraLoop } from './tour'
 import styles from './Hero.module.css'
 
@@ -90,10 +94,22 @@ export function Hero({ onStart }: { onStart: () => void }) {
     m.once('idle', () => setReady(true))
   }, [])
   const onMapFail = useCallback(() => setMapFailed(true), [])
-  // 모형을 누르면 그 장소로 다가간다(둘러보기가 자리 잡은 뒤에만 눌린다)
-  const onSelectLandmark = useCallback((landmark: Landmark) => {
-    map?.easeTo({ center: [landmark.lng, landmark.lat], zoom: 17, pitch: 60, bearing: map.getBearing(), duration: reduced() ? 0 : 1200 })
-  }, [map])
+  // 모형을 누르면 카메라가 다가가고 상세 화면이 올라온다(자동 이동은 멈춘다). 닫으면 카메라가 돌아오고 자동 이동이 다시 이어진다
+  const detail = useLandmarkDetail({
+    map,
+    // 카메라가 다가가기 전에 둘러보기·흘러가기를 먼저 멈춘다(다가가는 이동을 나중에 끊지 않게)
+    onOpen: () => {
+      driftRef.current?.stop()
+      tourRef.current?.stop()
+    },
+  })
+  const detailActive = detail.state.phase !== 'closed' || detail.returning
+  const onSelectLandmark = detail.open
+  const router = useRouter()
+  const startPlanAt = useCallback((landmark: Landmark) => {
+    startWithPlace(landmark.name)
+    router.push('/plan/schedule')
+  }, [router])
   // 지도가 늦거나 실패해도 글자는 보여야 한다
   useEffect(() => {
     const id = window.setTimeout(() => setReady(true), READY_TIMEOUT_MS)
@@ -124,12 +140,12 @@ export function Hero({ onStart }: { onStart: () => void }) {
     const drift = driftRef.current
     if (!map || !drift) return
     // 글자가 내려오는 동안에는 지도를 가만히 둔다(카메라 이동과 글자 연출이 한꺼번에 일어나면 끊긴다)
-    if (phase === 'intro' && homeReady && driftOk && active && !reduced()) drift.start()
+    if (phase === 'intro' && homeReady && driftOk && active && !detailActive && !reduced()) drift.start()
     else drift.stop()
-  }, [map, phase, homeReady, driftOk, active])
+  }, [map, phase, homeReady, driftOk, active, detailActive])
 
   // 둘러보기: 도착한 뒤 천천히 미끄러지듯 이동. 만지면 멈추고 TOUR_RESUME_MS 동안 안 만지면 이어간다
-  const tourWanted = phase === 'exploring' && arrived && active && !showHint
+  const tourWanted = phase === 'exploring' && arrived && active && !showHint && !detailActive
   useEffect(() => {
     const tour = tourRef.current
     if (!map || !tour) return
@@ -248,7 +264,7 @@ export function Hero({ onStart }: { onStart: () => void }) {
   } as React.CSSProperties
 
   return (
-    <section ref={heroRef} className={styles.hero} data-active={active} data-phase={phase} data-color={colorOn} data-ready={ready} style={cssVars}>
+    <section ref={heroRef} className={styles.hero} data-active={active} data-phase={phase} data-color={colorOn} data-ready={ready} data-detail={detailActive} style={cssVars}>
       <div className={styles.map}>
         <MapView
           mode="landing"
@@ -261,6 +277,7 @@ export function Hero({ onStart }: { onStart: () => void }) {
           onMapReady={onMapReady}
           onFail={onMapFail}
           onSelectLandmark={onSelectLandmark}
+          focusLandmarkId={detail.landmark?.id ?? null}
         />
       </div>
       {/* 모형에는 이름 라벨이 없어서, 화면을 못 보거나 키보드로 쓰는 사람을 위해 같은 이름의 목록을 둔다 */}
@@ -307,6 +324,9 @@ export function Hero({ onStart }: { onStart: () => void }) {
           </svg>
           끌어서 둘러보세요
         </div>
+      )}
+          {detail.landmark && detail.state.phase !== 'flying' && (
+        <LandmarkDetail landmark={detail.landmark} phase={detail.state.phase} onClose={detail.close} onStartPlan={startPlanAt} />
       )}
     </section>
   )
