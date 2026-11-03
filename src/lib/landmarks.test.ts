@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { LANDMARKS, LANDMARK_FADE_ZOOM, LANDMARK_SCALE_RANGE, hiddenFids, landmarkFade } from './landmarks'
+import { LANDMARKS, LANDMARK_FADE_ZOOM, LANDMARK_MATERIAL_COLORS, LANDMARK_SCALE_RANGE, LANDMARK_STYLE, hiddenFids, landmarkCenter, landmarkFade } from './landmarks'
 import { MAP_MAX_BOUNDS } from './map-config'
 
 // 대전 경계 안(건물 타일이 있는 범위)
@@ -49,6 +49,47 @@ describe('랜드마크 고정값', () => {
       expect(fs.existsSync(file)).toBe(true)
       expect(fs.readFileSync(file).subarray(0, 4).toString('ascii')).toBe('glTF')
     }
+  })
+})
+
+describe('offsetM 보정', () => {
+  it('보정한 중심도 대전 경계 안이고 기준 좌표에서 50m 안이다', () => {
+    for (const l of LANDMARKS) {
+      expect(Math.abs(l.offsetM[0])).toBeLessThanOrEqual(50)
+      expect(Math.abs(l.offsetM[1])).toBeLessThanOrEqual(50)
+      const [lng, lat] = landmarkCenter(l)
+      expect(lng).toBeGreaterThan(west)
+      expect(lng).toBeLessThan(east)
+      expect(lat).toBeGreaterThan(south)
+      expect(lat).toBeLessThan(north)
+    }
+  })
+
+  it('landmarkCenter 는 동쪽·북쪽 미터를 경도·위도로 바꿔 더한다', () => {
+    const [lng, lat] = landmarkCenter({ lng: 127.38, lat: 36.37, offsetM: [100, 100] })
+    expect(lng).toBeCloseTo(127.38 + 100 / (111320 * Math.cos((36.37 * Math.PI) / 180)), 9)
+    expect(lat).toBeCloseTo(36.37 + 100 / 110574, 9)
+    expect(landmarkCenter({ lng: 127.38, lat: 36.37, offsetM: [0, 0] })).toEqual([127.38, 36.37])
+  })
+
+  it('바닥 글로우 반지름용 footprint 긴 변이 양수다', () => {
+    for (const l of LANDMARKS) expect(l.footprintLongM).toBeGreaterThan(0)
+  })
+})
+
+describe('푸른빛 강조 값', () => {
+  it('기존 투톤 재질(벽·지붕·유리) 색과 유리 투명도가 정해져 있다', () => {
+    expect(LANDMARK_MATERIAL_COLORS.wall).toBe('#E3EAFB')
+    expect(LANDMARK_MATERIAL_COLORS.roof).toBe('#EEF3FE')
+    expect(LANDMARK_MATERIAL_COLORS.glass).toBe('#BFD3F8')
+  })
+
+  it('숨쉬기는 3초 주기로 0.12~0.22, 호버·선택은 0.3, 글로우는 0.35 → 0.5', () => {
+    expect(LANDMARK_STYLE.breathMs).toBe(3000)
+    expect([LANDMARK_STYLE.emissiveMin, LANDMARK_STYLE.emissiveMax]).toEqual([0.12, 0.22])
+    expect(LANDMARK_STYLE.emissiveActive).toBe(0.3)
+    expect([LANDMARK_STYLE.glowAlpha, LANDMARK_STYLE.glowAlphaActive]).toEqual([0.35, 0.5])
+    expect(LANDMARK_STYLE.glowRadiusRatio).toBe(0.75)
   })
 })
 

@@ -8,7 +8,7 @@ import type { Feature, FeatureCollection, LineString, Polygon } from 'geojson'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import type { TreesLayer } from './treesLayer'
 import type { LandmarksLayer } from './landmarksLayer'
-import { LANDMARKS, LANDMARK_FADE_ZOOM, LANDMARK_HIDDEN_LAYER_ID, LANDMARK_HIDDEN_SHADOW_LAYER_ID, hiddenFids, type Landmark } from '@/lib/landmarks'
+import { LANDMARKS, LANDMARK_FADE_ZOOM, landmarkCenter, LANDMARK_HIDDEN_LAYER_ID, LANDMARK_HIDDEN_SHADOW_LAYER_ID, hiddenFids, type Landmark } from '@/lib/landmarks'
 import { PIXEL_RATIO_MAX, PIXEL_RATIO_MAX_COMPACT, RISE_ZOOM } from '@/lib/landing-intro'
 import { maxPitchForZoom } from '@/lib/map-limits'
 import { crossingBearing, focusZone, nearBuildingIds, veilPolygon } from '@/lib/map-focus'
@@ -177,6 +177,9 @@ export default function MapView({ mode = 'plan', compact = false, interactive = 
   const [cursor, setCursor] = useState('')
   const treesRef = useRef<TreesLayer | null>(null)
   const landmarksRef = useRef<LandmarksLayer | null>(null)
+  // ?debug=landmarks: 숨긴 원래 건물 윤곽을 빨간 선으로, 모형은 반투명으로 보여 위치를 맞출 때 쓴다(&lm=id 면 그 곳을 위에서 내려다본다)
+  const [debug] = useState(() => typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('debug') === 'landmarks')
+  const [debugOpacity] = useState(() => (typeof window !== 'undefined' ? Number(new URLSearchParams(window.location.search).get('lmopacity') ?? 0.5) || 0.5 : 0.5))
   const [landmarksReady, setLandmarksReady] = useState(false)
   const overRoute = useRef(false)
   const overLandmark = useRef(false)
@@ -225,7 +228,7 @@ export default function MapView({ mode = 'plan', compact = false, interactive = 
     ;(async () => {
       try {
         const { createLandmarksLayer } = await import('./landmarksLayer')
-        const layer = await createLandmarksLayer(LANDMARKS, landing ? { riseZoom: RISE_ZOOM } : undefined)
+        const layer = await createLandmarksLayer(LANDMARKS, { riseZoom: landing ? RISE_ZOOM : undefined, compact, opacity: debug ? debugOpacity : undefined })
         if (cancelled) return
         layer.setVisible(landing || !flatRef.current)
         map.addLayer(layer, BUILDINGS_BEFORE_ID)
@@ -242,7 +245,7 @@ export default function MapView({ mode = 'plan', compact = false, interactive = 
       landmarksRef.current = null
       setLandmarksReady(false)
     }
-  }, [loaded, deferExtras, landing])
+  }, [loaded, deferExtras, landing, compact, debug, debugOpacity])
   // 모형이 나타나는 줌 구간에서 원래 건물(과 그림자)이 같이 사라진다. 모형을 못 불러왔거나 2D 보기면 원래 건물을 그대로 둔다
   useEffect(() => {
     const map = mapRef.current?.getMap()
@@ -375,13 +378,16 @@ export default function MapView({ mode = 'plan', compact = false, interactive = 
         onMouseLeave={() => { overRoute.current = false; setCursor(overLandmark.current ? 'pointer' : '') }}
         onMouseMove={e => {
           // 모형 위에서는 손 모양 커서
-          const hit = landmarksRef.current?.pick(e.point) != null
+          const landmark = landmarksRef.current?.pick(e.point) ?? null
+          landmarksRef.current?.setHover(landmark?.id ?? null)
+          const hit = landmark != null
           if (hit === overLandmark.current) return
           overLandmark.current = hit
           setCursor(hit || overRoute.current ? 'pointer' : '')
         }}
         onClick={e => {
           const landmark = landmarksRef.current?.pick(e.point)
+          landmarksRef.current?.setSelected(landmark?.id ?? null)
           if (landmark) { onSelectLandmark?.(landmark); return }
           const id = e.features?.[0]?.properties?.segmentId
           if (typeof id === 'string') onSelectSegment?.(id)
@@ -390,6 +396,11 @@ export default function MapView({ mode = 'plan', compact = false, interactive = 
           e.target.setMaxPitch(maxPitchForZoom(e.target.getZoom()))
           // landing 은 화면 전체를 매 프레임 다시 그려서 해상도를 낮춘다(고해상도 휴대폰 보호)
           if (landing) e.target.setPixelRatio(Math.min(window.devicePixelRatio || 1, compact ? PIXEL_RATIO_MAX_COMPACT : PIXEL_RATIO_MAX))
+          if (debug) {
+            ;(window as unknown as { __map?: unknown }).__map = e.target
+            const lm = LANDMARKS.find(l => l.id === new URLSearchParams(window.location.search).get('lm'))
+            if (lm) e.target.jumpTo({ center: landmarkCenter({ ...lm, offsetM: [0, 0] }), zoom: 17.5, pitch: 0, bearing: 0 })
+          }
           setLoaded(true)
           onMapReady?.(e.target)
         }}
@@ -406,6 +417,12 @@ export default function MapView({ mode = 'plan', compact = false, interactive = 
           <Layer {...nearInit} filter={nearFilter} beforeId={BUILDINGS_BEFORE_ID} />
           <Layer {...farInit} filter={farFilter} beforeId={BUILDINGS_BEFORE_ID} />
         </Source>
+        {/* 디버그: 숨긴 원래 건물 윤곽 */}
+        {debug && (
+          <Source id="landmark-debug" type="vector" tiles={[BUILDINGS_TILES]} minzoom={BUILDINGS_MIN_ZOOM} maxzoom={BUILDINGS_MAX_ZOOM}>
+            <Layer id="landmark-debug-outline" type="line" source-layer={BUILDINGS_SOURCE_LAYER} filter={isHiddenFid} paint={{ 'line-color': '#ff0000', 'line-width': 2.5 }} />
+          </Source>
+        )}
         {/* 구간 범위 밖을 흐리게 덮는 덮개. 범위 모양만 뚫려 있다 */}
         <Source id={VEIL_SOURCE_ID} type="geojson" data={veil}>
           <Layer {...veilLayer} beforeId={ROUTE_BEFORE_ID} />

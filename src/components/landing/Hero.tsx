@@ -10,7 +10,7 @@ import {
 } from '@/lib/landing-intro'
 import { BUILDINGS_TILES, PALETTE } from '@/lib/map-config'
 import type { MapPin } from '@/lib/map-geojson'
-import type { Landmark } from '@/lib/landmarks'
+import { LANDMARKS, type Landmark } from '@/lib/landmarks'
 import { createCameraLoop, metersToLon, type CameraLoop } from './tour'
 import styles from './Hero.module.css'
 
@@ -263,6 +263,16 @@ export function Hero({ onStart }: { onStart: () => void }) {
           onSelectLandmark={onSelectLandmark}
         />
       </div>
+      {/* 모형에는 이름 라벨이 없어서, 화면을 못 보거나 키보드로 쓰는 사람을 위해 같은 이름의 목록을 둔다 */}
+      {exploring && (
+        <ul className={styles.srOnly} aria-label="지도에 표시된 랜드마크">
+          {LANDMARKS.map(landmark => (
+            <li key={landmark.id}>
+              <button type="button" onClick={() => onSelectLandmark(landmark)}>{landmark.name} 가까이 보기</button>
+            </li>
+          ))}
+        </ul>
+      )}
       <div className={styles.veil} data-hidden={exploring} style={{ background: veilBackground }} aria-hidden="true" />
 
       <div className={styles.copy} data-hidden={exploring} aria-hidden={exploring} inert={exploring}>
