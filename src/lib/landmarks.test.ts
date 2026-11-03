@@ -32,10 +32,12 @@ describe('랜드마크 고정값', () => {
     expect(new Set(all).size).toBe(all.length)
   })
 
-  it('scale 은 0.8~1.3, 방향은 0~360 도', () => {
+  it('scale 은 0.8~2, 방향은 0~360 도', () => {
     for (const l of LANDMARKS) {
       expect(l.scale).toBeGreaterThanOrEqual(LANDMARK_SCALE_RANGE[0])
       expect(l.scale).toBeLessThanOrEqual(LANDMARK_SCALE_RANGE[1])
+      expect(l.heightScale).toBeGreaterThanOrEqual(1)
+      expect(l.heightScale).toBeLessThanOrEqual(2)
       expect(l.bearingDeg).toBeGreaterThanOrEqual(0)
       expect(l.bearingDeg).toBeLessThan(360)
     }

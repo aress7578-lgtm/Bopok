@@ -14,7 +14,7 @@ export type LandmarksLayer = CustomLayerInterface & {
 }
 
 // 지도와 같은 빛 방향: style 의 light(position [1.5, 210, 30] = 남서쪽 위)에서 오는 약한 방향광 + 고른 주변광
-const LIGHT = { ambient: 0.8, hemisphere: 0.22, directional: 0.32, position: [-0.29, 0.5, 1] as const }
+const LIGHT = { ambient: 0.72, hemisphere: 0.16, directional: 0.52, position: [-0.29, 0.5, 1] as const }
 
 // riseZoom: [시작 줌, 끝 줌]. 주면 줌이 이 구간을 지나는 동안 모형이 땅에서 솟는다(건물이 솟는 것과 같은 구간, S1 연출)
 export async function createLandmarksLayer(landmarks: Landmark[], opts: { riseZoom?: [number, number] } = {}): Promise<LandmarksLayer> {
@@ -40,13 +40,13 @@ export async function createLandmarksLayer(landmarks: Landmark[], opts: { riseZo
 
   // GLB 는 Y 가 위, 긴 변이 X, 앞이 +Z(남쪽). 지도 장면은 x 동쪽·y 남쪽·z 위라서 (X, Y, Z) → (X, Z, Y) 로 바꾼 뒤
   // 북 기준 시계 방향 bearing 만큼 돌린다(모형 +X 가 처음 동쪽 = 방위 90°). 방향이 뒤집히는 변환이라 면의 앞뒤는 가리지 않고(DoubleSide) 그린다
-  const orient = (bearingDeg: number, scale: number) => {
+  const orient = (bearingDeg: number, scale: number, heightScale: number) => {
     const phi = ((bearingDeg - 90) * Math.PI) / 180
     const c = Math.cos(phi)
     const s = Math.sin(phi)
     const swap = new THREE.Matrix4().set(1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1)
     const rotate = new THREE.Matrix4().set(c, -s, 0, 0, s, c, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1)
-    return rotate.multiply(swap).multiply(new THREE.Matrix4().makeScale(scale, scale, scale))
+    return rotate.multiply(swap).multiply(new THREE.Matrix4().makeScale(scale, scale * heightScale, scale))
   }
 
   const items: Item[] = []
@@ -73,7 +73,7 @@ export async function createLandmarksLayer(landmarks: Landmark[], opts: { riseZo
     const group = new THREE.Group()
     group.add(gltf.scene)
     group.matrixAutoUpdate = false
-    group.matrix.copy(orient(landmark.bearingDeg, landmark.scale))
+    group.matrix.copy(orient(landmark.bearingDeg, landmark.scale, landmark.heightScale))
     const scene = new THREE.Scene()
     scene.add(group)
     scene.add(new THREE.AmbientLight(0xffffff, LIGHT.ambient * Math.PI))
