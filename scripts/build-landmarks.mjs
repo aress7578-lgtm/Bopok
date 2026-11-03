@@ -16,6 +16,10 @@ const FILES = {
   'science-museum.glb': 'science-museum.glb', // 국립중앙과학관
   'landmark-b-umbrella.glb': 'arts-center.glb', // 대전예술의전당
   'landmark-a-bands.glb': 'art-museum.glb', // 대전시립미술관
+  'hanbat.glb': 'hanbat-arboretum.glb', // 한밭수목원(열대식물원)
+  'ibs-library.glb': 'ibs-library.glb', // 기초과학연구원 도서관
+  'expo-bridge.glb': 'expo-bridge.glb', // 엑스포다리
+  'expo-plaza.glb': 'expo-plaza.glb', // 대전엑스포 시민광장
 }
 
 const io = new NodeIO().registerExtensions([KHRMeshQuantization])
