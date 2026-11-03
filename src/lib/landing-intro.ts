@@ -49,10 +49,12 @@ export const TOUR_MS = 14000
 export const TOUR_RESUME_MS = 5000           // 만진 뒤 이만큼 안 만지면 자동 이동을 다시 이어간다
 export const TOUR_WAYPOINTS: LandingView[] = [
   EXPLORE_VIEW,
-  { center: [127.3885, 36.3735], zoom: 15.8, pitch: 60, bearing: 10 },
+  // 대전예술의전당·대전시립미술관 모형 (landmarks.ts)
+  { center: [127.3847, 36.3669], zoom: 16.4, pitch: 62, bearing: 20 },
   { center: [127.3925, 36.3750], zoom: 15.8, pitch: 64, bearing: 45 },
   { center: [127.3870, 36.3775], zoom: 15.8, pitch: 62, bearing: 80 },
-  { center: [127.3790, 36.3748], zoom: 15.8, pitch: 66, bearing: 15 },
+  // 국립중앙과학관 모형
+  { center: [127.3758, 36.3753], zoom: 16.4, pitch: 64, bearing: -35 },
 ]
 
 // 시연 장소 핀(한밭수목원, 국립중앙과학관, 대전시립미술관). 좌표는 demo-geo.ts 의 입구·전시관 값

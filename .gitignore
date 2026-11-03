@@ -48,3 +48,6 @@ next-env.d.ts
 
 # scripts/copy-map-assets.mjs 가 만드는 파일
 /public/map/maplibre-gl-worker.mjs
+
+# landmark 3D model originals (optimized outputs live in public/models/*.glb)
+/public/models/raw/

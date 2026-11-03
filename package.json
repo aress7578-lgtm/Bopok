@@ -12,7 +12,8 @@
     "map:assets": "node scripts/copy-map-assets.mjs",
     "map:style": "node scripts/build-map-style.mjs",
     "data:trees": "node scripts/build-trees.mjs",
-    "data:boundary": "node scripts/build-boundary.mjs"
+    "data:boundary": "node scripts/build-boundary.mjs",
+    "data:landmarks": "node scripts/build-landmarks.mjs"
   },
   "dependencies": {
     "@turf/turf": "^7.4.0",
@@ -24,6 +25,9 @@
     "three": "^0.186.1"
   },
   "devDependencies": {
+    "@gltf-transform/core": "^4.5.1",
+    "@gltf-transform/extensions": "^4.5.1",
+    "@gltf-transform/functions": "^4.5.1",
     "@tailwindcss/turbopack": "^4",
     "@types/geojson": "^7946.0.16",
     "@types/geojson-vt": "^3.2.5",

@@ -10,6 +10,7 @@ import {
 } from '@/lib/landing-intro'
 import { BUILDINGS_TILES, PALETTE } from '@/lib/map-config'
 import type { MapPin } from '@/lib/map-geojson'
+import type { Landmark } from '@/lib/landmarks'
 import { createCameraLoop, metersToLon, type CameraLoop } from './tour'
 import styles from './Hero.module.css'
 
@@ -89,6 +90,10 @@ export function Hero({ onStart }: { onStart: () => void }) {
     m.once('idle', () => setReady(true))
   }, [])
   const onMapFail = useCallback(() => setMapFailed(true), [])
+  // 모형을 누르면 그 장소로 다가간다(둘러보기가 자리 잡은 뒤에만 눌린다)
+  const onSelectLandmark = useCallback((landmark: Landmark) => {
+    map?.easeTo({ center: [landmark.lng, landmark.lat], zoom: 17, pitch: 60, bearing: map.getBearing(), duration: reduced() ? 0 : 1200 })
+  }, [map])
   // 지도가 늦거나 실패해도 글자는 보여야 한다
   useEffect(() => {
     const id = window.setTimeout(() => setReady(true), READY_TIMEOUT_MS)
@@ -255,6 +260,7 @@ export function Hero({ onStart }: { onStart: () => void }) {
           pins={exploring && arrived ? placePins : []}
           onMapReady={onMapReady}
           onFail={onMapFail}
+          onSelectLandmark={onSelectLandmark}
         />
       </div>
       <div className={styles.veil} data-hidden={exploring} style={{ background: veilBackground }} aria-hidden="true" />
