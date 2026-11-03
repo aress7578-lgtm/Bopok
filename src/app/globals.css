@@ -70,3 +70,6 @@ footer{border-top:1px solid #eee;max-width:1120px;margin:auto;padding:30px 20px 
 
 /* 랜드마크 상세 화면이 열려 있는 동안 결과 지도 위 버튼을 숨긴다 */
 .result-page[data-detail="true"] .map-label { opacity: 0; pointer-events: none; transition: opacity .3s; }
+
+/* 랜드마크 상세 화면이 떠 있는 동안 글자 크기(가/가+) 토글을 숨긴다 */
+body[data-landmark-detail] .font-toggle { display: none; }

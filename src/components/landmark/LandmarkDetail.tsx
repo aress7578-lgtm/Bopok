@@ -30,7 +30,10 @@ export function LandmarkDetail({ landmark, phase, onClose, onStartPlan }: { land
   useEffect(() => {
     const before = document.activeElement as HTMLElement | null
     closeRef.current?.focus({ preventScroll: true })
+    // 상세 화면이 떠 있는 동안 가/가+ 글자 크기 토글은 숨긴다(globals.css 의 body[data-landmark-detail])
+    document.body.dataset.landmarkDetail = 'open'
     return () => {
+      delete document.body.dataset.landmarkDetail
       if (before && document.contains(before)) before.focus({ preventScroll: true })
     }
   }, [])
