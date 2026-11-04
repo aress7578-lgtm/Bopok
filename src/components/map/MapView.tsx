@@ -230,7 +230,7 @@ export default function MapView({ mode = 'plan', compact = false, interactive = 
     ;(async () => {
       try {
         const { createLandmarksLayer } = await import('./landmarksLayer')
-        const layer = await createLandmarksLayer(LANDMARKS, { riseZoom: landing ? RISE_ZOOM : undefined, compact, opacity: debug ? debugOpacity : undefined })
+        const layer = await createLandmarksLayer(LANDMARKS, { riseZoom: landing ? RISE_ZOOM : undefined, compact, breathe: landing, opacity: debug ? debugOpacity : undefined })
         if (cancelled) return
         layer.setVisible(landing || !flatRef.current)
         map.addLayer(layer, BUILDINGS_BEFORE_ID)
