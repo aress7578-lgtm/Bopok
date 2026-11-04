@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
-import { useRouter } from 'next/navigation'
 import type { Map as MapLibreMap } from 'maplibre-gl'
 import {
   ACTIONS, BACK_FLY_MS, DRIFT_METERS, DRIFT_MS, EXIT, EXPLORE_VIEW, FLY_MS, GLYPH, GLYPH_SEEN, HINT_MS, INTRO_VIEW, LEAD,
@@ -11,10 +10,9 @@ import {
 } from '@/lib/landing-intro'
 import { BUILDINGS_TILES, PALETTE } from '@/lib/map-config'
 import type { MapPin } from '@/lib/map-geojson'
-import { LANDMARKS, type Landmark } from '@/lib/landmarks'
+import { LANDMARKS } from '@/lib/landmarks'
 import { LandmarkDetail } from '@/components/landmark/LandmarkDetail'
 import { useLandmarkDetail } from '@/components/landmark/useLandmarkDetail'
-import { startWithPlace } from '@/lib/plan-storage'
 import { createCameraLoop, metersToLon, type CameraLoop } from './tour'
 import styles from './Hero.module.css'
 
@@ -105,11 +103,7 @@ export function Hero({ onStart }: { onStart: () => void }) {
   })
   const detailActive = detail.state.phase !== 'closed' || detail.returning
   const onSelectLandmark = detail.open
-  const router = useRouter()
-  const startPlanAt = useCallback((landmark: Landmark) => {
-    startWithPlace(landmark.name)
-    router.push('/plan/schedule')
-  }, [router])
+
   // 지도가 늦거나 실패해도 글자는 보여야 한다
   useEffect(() => {
     const id = window.setTimeout(() => setReady(true), READY_TIMEOUT_MS)
@@ -326,7 +320,7 @@ export function Hero({ onStart }: { onStart: () => void }) {
         </div>
       )}
           {detail.landmark && detail.state.phase !== 'flying' && (
-        <LandmarkDetail landmark={detail.landmark} phase={detail.state.phase} onClose={detail.close} onStartPlan={startPlanAt} />
+        <LandmarkDetail landmark={detail.landmark} phase={detail.state.phase} onClose={detail.close} />
       )}
     </section>
   )

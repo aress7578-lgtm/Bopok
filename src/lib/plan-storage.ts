@@ -44,15 +44,6 @@ export function startFresh() {
   } catch {}
 }
 
-// 랜드마크 상세 화면의 "이 장소로 일정 만들기": 새 일정으로 시작하면서 일정 입력(S3)에 이 장소를 한 줄 넣어 둔다
-export const scheduleForPlace = (name: string) => `10:00 ${name}`
-
-export function startWithPlace(name: string) {
-  try {
-    sessionStorage.setItem(PLAN_STORAGE_KEY, JSON.stringify({ ...initialPlan, schedule: scheduleForPlace(name) }))
-  } catch {}
-}
-
 export function startDemo() {
   try {
     sessionStorage.setItem(PLAN_STORAGE_KEY, JSON.stringify(demoPlan))

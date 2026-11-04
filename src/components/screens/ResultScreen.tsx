@@ -11,7 +11,6 @@ import { buildPins, buildRouteGeoJSON, routeBounds } from '@/lib/map-geojson'
 import type { Map as MapLibreMap } from 'maplibre-gl'
 import { LandmarkDetail } from '@/components/landmark/LandmarkDetail'
 import { useLandmarkDetail } from '@/components/landmark/useLandmarkDetail'
-import { initialPlan, scheduleForPlace } from '@/lib/plan-storage'
 
 // 서버에는 WebGL이 없어서 지도는 브라우저에서만 불러온다
 const MapView = dynamic(() => import('@/components/map/MapView'), {
@@ -80,7 +79,7 @@ export function ResultScreen() {
       ? <button className="button" onClick={() => go('/plan/options')}>수정안 보기</button>
       : <button className="button" onClick={() => { update({ option: 0 }); go('/plan/final') }}>이대로 확정하기</button>}</div>
   {detail.landmark && detail.state.phase !== 'flying' && (
-      <LandmarkDetail landmark={detail.landmark} phase={detail.state.phase} onClose={detail.close} onStartPlan={landmark => { update({ ...initialPlan, schedule: scheduleForPlace(landmark.name) }); go('/plan/schedule') }} />
+      <LandmarkDetail landmark={detail.landmark} phase={detail.state.phase} onClose={detail.close} />
     )}
   </div>
 }
