@@ -14,7 +14,8 @@
     "data:trees": "node scripts/build-trees.mjs",
     "data:boundary": "node scripts/build-boundary.mjs",
     "data:landmarks": "node scripts/build-landmarks.mjs",
-    "data:landmark-images": "node scripts/build-landmark-images.mjs"
+    "data:landmark-images": "node scripts/build-landmark-images.mjs",
+    "data:indoor-images": "node scripts/build-indoor-images.mjs"
   },
   "dependencies": {
     "@turf/turf": "^7.4.0",

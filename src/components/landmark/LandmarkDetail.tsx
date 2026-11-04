@@ -6,10 +6,18 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
 import { landmarkSourceText, shouldCloseOnKey, shouldCloseSheet, type DetailPhase } from '@/lib/landmark-detail'
 import type { Landmark } from '@/lib/landmarks'
+import { ARTS_CENTER_HALLS, hallById } from '@/lib/indoor/arts-center'
+import { IndoorInfo } from './indoor/IndoorInfo'
+import { IndoorProvider } from './indoor/IndoorProvider'
+import { IndoorStage } from './indoor/IndoorStage'
+import indoorStyles from './indoor/Indoor.module.css'
 import styles from './LandmarkDetail.module.css'
 
 // 미니맵은 패널이 마운트될 때만 불러오고 만든다(닫히면 함께 정리된다)
 const LandmarkMiniMap = dynamic(() => import('./LandmarkMiniMap'), { ssr: false, loading: () => null })
+
+// 실내 보기는 대전예술의전당에만 있다(시연용 개략도)
+const INDOOR_LANDMARK_ID = 'arts-center'
 
 const FOCUSABLE = 'button:not([disabled]), [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
 
@@ -22,6 +30,18 @@ export function LandmarkDetail({ landmark, phase, onClose }: { landmark: Landmar
   const [drag, setDrag] = useState<number | null>(null) // 모바일 시트를 끌고 있는 거리(px)
   const dragStart = useRef<number | null>(null)
   const hasImage = !!landmark.image && img !== 'error'
+  const hasIndoor = landmark.id === INDOOR_LANDMARK_ID
+  const [tab, setTab] = useState<string>('outside') // 'outside' 또는 홀 id
+  const [switched, setSwitched] = useState(false) // 탭을 한 번이라도 바꿨는지: 처음 열 때는 기존 등장 연출만 쓴다
+  const hall = hasIndoor && tab !== 'outside' ? hallById(tab) : undefined
+  // 편집기(?debug=indoor)는 개발 중에만
+  const [indoorDebug] = useState(() => process.env.NODE_ENV !== 'production' && typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('debug') === 'indoor')
+  const hasLeft = hasImage || hasIndoor
+  const changeTab = (next: string) => {
+    if (next === tab) return
+    setTab(next)
+    setSwitched(true)
+  }
 
   // 화면이 막 올라오는 순간 → opening, 올라온 뒤 → open, 내려가는 중 → closing (CSS 가 data-state 하나로 연출한다)
   const state = phase === 'open' ? 'open' : phase === 'closing' ? 'closing' : 'opening'
@@ -91,47 +111,93 @@ export function LandmarkDetail({ landmark, phase, onClose }: { landmark: Landmar
     if (shouldCloseSheet(dy)) onClose()
   }
 
+  const outsideFigure = hasImage ? (
+    <figure className={`${styles.imageCard} ${styles.stagger}`} style={{ '--i': 0, margin: 0 } as React.CSSProperties} data-img={img}>
+      <span className={styles.shimmer} aria-hidden="true" />
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img ref={imgRef} src={landmark.image} alt={landmark.imageAlt} draggable={false} onLoad={() => setImg('loaded')} onError={() => setImg('error')} />
+    </figure>
+  ) : hasIndoor ? (
+    <div className={`${indoorStyles.stageCard} ${styles.stagger}`} style={{ '--i': 0 } as React.CSSProperties}>
+      <p className={styles.imageFallback}>{landmark.name}</p>
+    </div>
+  ) : null
+
+  const panel = (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={titleId}
+      className={styles.panel}
+      data-noimage={!hasLeft}
+      data-indoor={!!hall}
+      data-dragging={drag !== null}
+      style={drag !== null ? ({ '--drag': drag } as React.CSSProperties) : undefined}
+    >
+      <div className={styles.grabber} onPointerDown={onDragStart} onPointerMove={onDragMove} onPointerUp={onDragEnd} onPointerCancel={onDragEnd} aria-hidden="true" />
+      {hasIndoor ? (
+        <div className={indoorStyles.left}>
+          <div className={`${indoorStyles.tabs} ${styles.stagger}`} style={{ '--i': 0 } as React.CSSProperties} role="tablist" aria-label="보기 선택">
+            <button type="button" role="tab" className={indoorStyles.tab} aria-selected={tab === 'outside'} onClick={() => changeTab('outside')}>외관</button>
+            {ARTS_CENTER_HALLS.map(h => (
+              <button key={h.hallId} type="button" role="tab" className={indoorStyles.tab} aria-selected={tab === h.hallId} onClick={() => changeTab(h.hallId)}>{h.name}</button>
+            ))}
+          </div>
+          <div key={tab} className={switched ? indoorStyles.appear : undefined} style={{ height: '100%' }}>
+            {hall ? (
+              <div className={`${indoorStyles.stageCard} ${styles.stagger}`} style={{ '--i': 0 } as React.CSSProperties}>
+                <IndoorStage />
+              </div>
+            ) : (
+              outsideFigure
+            )}
+          </div>
+        </div>
+      ) : (
+        outsideFigure
+      )}
+      <div className={styles.side}>
+        <section className={`${styles.card} ${styles.stagger}`} style={{ '--i': 1 } as React.CSSProperties}>
+          <button ref={closeRef} type="button" className={styles.close} onClick={onClose} aria-label="상세 화면 닫기">
+            <span aria-hidden="true">✕</span>
+          </button>
+          {hall ? (
+            <>
+              <p className={styles.area}>{landmark.name} · 실내 보기</p>
+              <div key={tab} className={switched ? indoorStyles.appear : undefined}>
+                <IndoorInfo titleId={titleId} />
+              </div>
+            </>
+          ) : (
+            <div key={tab} className={switched ? indoorStyles.appear : undefined} style={{ display: 'contents' }}>
+              <p className={styles.area}>{landmark.area}</p>
+              <h2 id={titleId} className={styles.name}>{landmark.name}</h2>
+              <p className={styles.summary}>{landmark.summary}</p>
+              <ul className={styles.tags} aria-label="특징">
+                {landmark.tags.map(tag => <li key={tag}>{tag}</li>)}
+              </ul>
+              <p className={styles.source}>{landmarkSourceText(landmark)}</p>
+              {landmark.locationNote && <p className={styles.note}>{landmark.locationNote}</p>}
+            </div>
+          )}
+          <button type="button" className={`${styles.cta} ${styles.ctaCard}`} onClick={onClose}>지도 더 둘러보기</button>
+        </section>
+        <div className={`${styles.mapBox} ${styles.stagger}`} style={{ '--i': 2 } as React.CSSProperties} role="img" aria-label={`${landmark.name} 위치 지도`}>
+          <LandmarkMiniMap landmark={landmark} />
+        </div>
+      </div>
+      <button type="button" className={`${styles.cta} ${styles.ctaSticky}`} onClick={onClose}>지도 더 둘러보기</button>
+    </div>
+  )
+
   return (
     <div ref={rootRef} className={styles.root} data-state={state} onKeyDown={trapFocus}>
       <div className={styles.backdrop} onClick={onClose} aria-hidden="true" />
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        className={styles.panel}
-        data-noimage={!hasImage}
-        data-dragging={drag !== null}
-        style={drag !== null ? ({ '--drag': drag } as React.CSSProperties) : undefined}
-      >
-        <div className={styles.grabber} onPointerDown={onDragStart} onPointerMove={onDragMove} onPointerUp={onDragEnd} onPointerCancel={onDragEnd} aria-hidden="true" />
-        {hasImage && (
-          <figure className={`${styles.imageCard} ${styles.stagger}`} style={{ '--i': 0, margin: 0 } as React.CSSProperties} data-img={img}>
-            <span className={styles.shimmer} aria-hidden="true" />
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img ref={imgRef} src={landmark.image} alt={landmark.imageAlt} draggable={false} onLoad={() => setImg('loaded')} onError={() => setImg('error')} />
-          </figure>
-        )}
-        <div className={styles.side}>
-          <section className={`${styles.card} ${styles.stagger}`} style={{ '--i': 1 } as React.CSSProperties}>
-            <button ref={closeRef} type="button" className={styles.close} onClick={onClose} aria-label="상세 화면 닫기">
-              <span aria-hidden="true">✕</span>
-            </button>
-            <p className={styles.area}>{landmark.area}</p>
-            <h2 id={titleId} className={styles.name}>{landmark.name}</h2>
-            <p className={styles.summary}>{landmark.summary}</p>
-            <ul className={styles.tags} aria-label="특징">
-              {landmark.tags.map(tag => <li key={tag}>{tag}</li>)}
-            </ul>
-            <p className={styles.source}>{landmarkSourceText(landmark)}</p>
-            {landmark.locationNote && <p className={styles.note}>{landmark.locationNote}</p>}
-            <button type="button" className={`${styles.cta} ${styles.ctaCard}`} onClick={onClose}>지도 더 둘러보기</button>
-          </section>
-          <div className={`${styles.mapBox} ${styles.stagger}`} style={{ '--i': 2 } as React.CSSProperties} role="img" aria-label={`${landmark.name} 위치 지도`}>
-            <LandmarkMiniMap landmark={landmark} />
-          </div>
-        </div>
-        <button type="button" className={`${styles.cta} ${styles.ctaSticky}`} onClick={onClose}>지도 더 둘러보기</button>
-      </div>
+      {hasIndoor ? (
+        <IndoorProvider hall={hall ?? ARTS_CENTER_HALLS[0]} debug={indoorDebug}>{panel}</IndoorProvider>
+      ) : (
+        panel
+      )}
     </div>
   )
 }

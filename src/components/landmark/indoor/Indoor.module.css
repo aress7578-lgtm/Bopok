@@ -1,0 +1,401 @@
+/* 홀 실내 보기. 색은 상세 화면(.root)이 정한 변수를 이어받고, 없으면 같은 값을 쓴다.
+   글자는 rem 이라 가/가+ 글자 크기 설정에서 함께 커진다. */
+
+/* 탭을 바꿀 때: 아래에서 위로, 흐림에서 또렷하게 (상세 화면 등장과 같은 연출, 500ms) */
+.appear {
+  animation: appear 500ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes appear {
+  from { opacity: 0; transform: translateY(32px); filter: blur(8px); }
+  to { opacity: 1; transform: none; filter: none; }
+}
+
+/* ───────── 왼쪽: 탭 + 무대 ───────── */
+.left {
+  position: relative;
+  height: 100%;
+  min-height: 0;
+}
+.tabs {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  right: 74px;
+  z-index: 4;
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 2px;
+  scrollbar-width: none;
+}
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+.tab,
+.backBtn,
+.floorChip,
+.pick {
+  flex: none;
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1px solid var(--card-line, #e6e1ea);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--card-ink, #1f2a1c);
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.tab[aria-selected='true'],
+.floorChip[aria-pressed='true'],
+.pick[aria-pressed='true'] {
+  background: var(--blue, #1d4ed8);
+  border-color: var(--blue, #1d4ed8);
+  color: #fff;
+}
+.tab:focus-visible,
+.backBtn:focus-visible,
+.floorChip:focus-visible,
+.pick:focus-visible {
+  outline: 3px solid var(--blue, #1d4ed8);
+  outline-offset: 2px;
+}
+
+.stageCard {
+  position: relative;
+  height: 100%;
+  border-radius: 24px;
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid var(--card-line, #e6e1ea);
+  min-height: 0;
+}
+.stage {
+  position: relative;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 66px 14px 14px; /* 위 66px: 탭 자리 */
+  min-height: 0;
+}
+.stageTop {
+  position: absolute;
+  top: 66px;
+  left: 20px;
+  right: 20px;
+  z-index: 3;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  pointer-events: none;
+}
+.stageTop > * {
+  pointer-events: auto;
+}
+.stage[data-view='plan'] {
+  padding-top: 118px; /* 탭 + 층 칩 줄 */
+}
+.floorChips {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.zoomWrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  overflow: auto;
+  container-type: size;
+  touch-action: pan-x pan-y; /* 두 손가락 모으기는 우리가 처리한다 */
+}
+.box {
+  position: relative;
+  flex: none;
+  margin: auto; /* 확대해서 넘칠 때도 왼쪽·위가 잘리지 않게 */
+  width: calc(min(100cqw, 100cqh * var(--ar)) * var(--zoom, 1));
+  aspect-ratio: var(--ar);
+  overflow: hidden;
+}
+.box img {
+  display: block;
+  user-select: none;
+}
+.box > img:not(.planImg) {
+  width: 100%;
+  height: 100%;
+}
+.planImg {
+  position: absolute;
+  max-width: none;
+}
+.swap {
+  animation: appear 500ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.planIn {
+  animation: planIn 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes planIn {
+  from { opacity: 0; transform: scale(0.88); }
+  to { opacity: 1; transform: none; }
+}
+.overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.hit {
+  fill: transparent;
+  stroke: transparent;
+  stroke-width: 0.004;
+  cursor: pointer;
+  transition: fill 200ms ease, stroke 200ms ease;
+}
+.hit:hover,
+.hit:focus-visible {
+  fill: rgba(29, 78, 216, 0.16);
+  stroke: var(--blue, #1d4ed8);
+  outline: none;
+}
+.floorLabel {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(31, 42, 28, 0.12);
+  color: var(--card-ink, #1f2a1c);
+  font-size: 0.8125rem;
+  font-weight: 800;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+/* 경로 선: pathLength=1 이라 길이와 상관없이 1 → 0 으로 그려진다 */
+.route {
+  fill: none;
+  stroke: #1d4ed8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.route[data-animated='true'] {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: draw var(--draw, 1200ms) linear forwards;
+}
+@keyframes draw {
+  to { stroke-dashoffset: 0; }
+}
+.routeEnd {
+  fill: #1d4ed8;
+}
+.pulse {
+  fill: none;
+  stroke: #1d4ed8;
+  stroke-width: 2px;
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.pulse[data-animated='true'] {
+  animation: pulse 600ms ease-out var(--draw, 1200ms) 1 both;
+}
+@keyframes pulse {
+  from { opacity: 0.7; transform: scale(1); }
+  to { opacity: 0; transform: scale(2.6); }
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.8125rem;
+}
+.legend li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.legendDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+.legendDashed {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1.5px dashed #6b645a;
+}
+.demoChip {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  z-index: 3;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: #fff;
+  border: 1px solid var(--card-line, #e6e1ea);
+  color: #5b564e;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  pointer-events: none;
+}
+
+/* ───────── 오른쪽: 정보 카드 안쪽 ───────── */
+.info {
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 18px; /* 아래 고정 버튼의 흰 그림자가 글을 가리지 않게 */
+}
+.hallName {
+  margin: 0 0 8px;
+  font-family: 'Noto Serif KR', serif;
+  font-size: 1.7rem;
+  font-weight: 700;
+  line-height: 1.3;
+}
+.seatText {
+  margin: 0 0 10px;
+  font-size: 0.9375rem;
+  line-height: 1.6;
+}
+.notice {
+  margin: 0 0 18px;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: #6b645a;
+}
+.routeBox {
+  display: block;
+}
+.routeTitle {
+  margin: 0 0 10px;
+  font-size: 1rem;
+  font-weight: 800;
+}
+.chipRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 10px;
+}
+.pick[data-small] {
+  min-height: 36px;
+  font-size: 0.8125rem;
+}
+.hint {
+  margin: 4px 0 0;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: #6b645a;
+}
+.summaryChip {
+  display: inline-block;
+  margin: 6px 0 8px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: #e8efff;
+  color: #1e3a8a;
+  font-size: 0.875rem;
+  font-weight: 700;
+  line-height: 1.5;
+}
+.summaryChip[data-tone='warn'] {
+  background: #fff7e6;
+  color: #7a4b00;
+}
+.warnings {
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.8125rem;
+  color: #7a4b00;
+}
+.warnings li::before {
+  content: '⚠ ';
+}
+.steps {
+  margin: 0;
+  padding-left: 1.4em;
+  font-size: 0.9375rem;
+  line-height: 1.8;
+}
+
+/* ───────── 좌표 편집기(개발용) ───────── */
+.editor {
+  position: fixed;
+  left: 12px;
+  bottom: 12px;
+  z-index: 200;
+  width: min(420px, calc(100vw - 24px));
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid #999;
+  border-radius: 10px;
+  background: #fffbe6;
+  color: #222;
+  font-size: 12px;
+}
+.editor p {
+  margin: 0;
+}
+.editor textarea {
+  width: 100%;
+  font: 11px/1.4 monospace;
+}
+.editorRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+/* ───────── 모바일 ───────── */
+@media (max-width: 1023px) {
+  .left {
+    flex: none;
+    height: auto;
+  }
+  .stageCard {
+    height: min(66dvh, 560px);
+  }
+  /* 닫기 버튼(시트 오른쪽 위에 고정)과 겹치지 않게 탭은 오른쪽을 비우고, 층 칩 줄은 한 줄 아래로 */
+  .tabs {
+    right: 64px;
+  }
+  .stageTop {
+    top: 92px;
+  }
+  .stage[data-view='plan'] {
+    padding-top: 140px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .appear,
+  .swap,
+  .planIn {
+    animation: none;
+  }
+  .route[data-animated='true'] {
+    animation: none;
+    stroke-dasharray: none;
+    stroke-dashoffset: 0;
+  }
+  .hit {
+    transition: none;
+  }
+}
