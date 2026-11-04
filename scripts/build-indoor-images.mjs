@@ -19,13 +19,28 @@ const FILES = {
   'ensemble-exploded': '886843456_1716032436474997_710282841840539664_n.webp', // 앙상블홀 입체 분해도
 }
 
+// 배경이 분홍빛인 그림은 밝은 픽셀의 분홍 기운만 걷어 흰색으로 만든다(좌석·그림자처럼 색이 있는 부분은 그대로)
+const WHITEN = new Set(['ensemble-exploded'])
+async function whiten(input) {
+  const { data, info } = await sharp(input).rotate().resize({ width: MAX_SIDE, height: MAX_SIDE, fit: 'inside', withoutEnlargement: true }).removeAlpha().raw().toBuffer({ resolveWithObject: true })
+  for (let i = 0; i < data.length; i += 3) {
+    const g = data[i + 1]
+    const w = Math.min(1, Math.max(0, (g - 205) / 20)) // g 205 이하는 그대로, 225 이상은 완전히 흰 쪽으로
+    if (w === 0) continue
+    const white = 255 - (255 - g) * 0.15
+    for (let c = 0; c < 3; c++) data[i + c] = Math.round(data[i + c] * (1 - w) + white * w)
+  }
+  return sharp(data, { raw: info })
+}
+
 fs.mkdirSync(OUT, { recursive: true })
 for (const [id, name] of Object.entries(FILES)) {
   const input = path.join(SRC, name)
   if (!fs.existsSync(input)) throw new Error(`원본 누락: ${input}`)
   let buf = null
   for (let quality = 85; quality >= 40; quality -= 5) {
-    buf = await sharp(input).rotate().resize({ width: MAX_SIDE, height: MAX_SIDE, fit: 'inside', withoutEnlargement: true }).webp({ quality }).toBuffer()
+    const img = WHITEN.has(id) ? await whiten(input) : sharp(input).rotate().resize({ width: MAX_SIDE, height: MAX_SIDE, fit: 'inside', withoutEnlargement: true })
+    buf = await img.webp({ quality }).toBuffer()
     if (buf.length <= MAX_BYTES) break
   }
   const meta = await sharp(buf).metadata()
